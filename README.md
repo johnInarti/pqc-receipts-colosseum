@@ -3,7 +3,7 @@
 Public companion repository for FractalAI's entry in Colosseum's **Crypto World's Fair** hackathon (Sept 14 – Oct 12, 2026).
 It contains the parts of the system a third party needs to **verify our claims without trusting us**: the offline
 verifiers, the golden conformance vectors, the anchor contracts, and the design docs. The node and the web app live in a
-private monorepo (`johnInarti/FRACTAL-AI`); everything here is either extracted from it verbatim or reproducible against
+proprietary, closed-source codebase; everything here is either extracted from it verbatim or reproducible against
 the live endpoints listed below.
 
 > Honesty first. Everything we claim carries a live URL, a transaction hash or a command you can run.
@@ -84,7 +84,7 @@ Full record with every tx: `docs/ARC-PQC-RECEIPT-ANCHOR.md` and `deployments/anc
 
 Colosseum judges only the work done between **Sept 14 and Oct 12, 2026** and requires disclosure of pre-existing code.
 Pre-existing (before Sept 14): the Rust node, the ML-DSA-65 consensus signer, the first x402 routes, the first MIDAS scanner.
-Built during the hackathon window (all commits dated in the private monorepo, hashes in `docs/`): reconstructible receipts
+Built during the hackathon window (commits dated in our private codebase, hashes in `docs/`): reconstructible receipts
 (block + logIndex) and the JCS canonicalization fix; the signed, epoch-chained key directory and two key rotations in
 production (epochs 2 and 3); MIDAS signed alerts, `/midas/proof` and the public alert-receipt API; the discovery rewrite of the
 radar (0 → 10,315 tracked addresses) and the missed-opportunity ledger; MidasRescueVault V2 + keeper; FRC-55R asset layer and

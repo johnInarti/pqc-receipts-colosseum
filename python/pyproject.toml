@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fractalai-pqc-verify"
+version = "0.1.0"
+description = "Offline, fail-closed verifier for FractalAI post-quantum (ML-DSA-65 / FIPS 204) signed receipts and agent-receipt conformance vectors."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "John Edward Romo Sanchez", email = "softnextceo@gmail.com" }]
+keywords = ["post-quantum", "ml-dsa", "fips-204", "dilithium", "x402", "receipts", "agents", "langchain", "crewai"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Security :: Cryptography",
+  "Typing :: Typed",
+]
+dependencies = ["dilithium-py>=1.4,<2"]
+
+[project.optional-dependencies]
+fast = ["pqcrypto>=1.0,<2"]
+test = ["pytest>=7"]
+
+[project.scripts]
+fractalai-verify = "fractalai_pqc_verify.cli:main"
+
+[project.urls]
+Homepage = "https://fractalai.net.co"
+Source = "https://github.com/johnInarti/pqc-receipts-colosseum/tree/main/python"
+"Key directory" = "https://fractalai.net.co/.well-known/x402-receipt-keys"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+fractalai_pqc_verify = ["vectors/*.json", "py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["network: hits the live FractalAI endpoints (deselect with -m 'not network')"]

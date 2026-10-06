@@ -45,6 +45,7 @@ conformance/   neutral conformance suite + golden vectors for PQC-signed agent r
                x402 SAR, ACP verdict, RFC 9964 JOSE, W3C VC-DI, wg-identity HAI, A2A signed-receipts/v1)
 contracts/     PQCReceiptAnchor.sol (write-once, ownerless timestamp anchor; 20/20 Hardhat tests) and
                FractalCheckpoint.sol (append-only accountability anchor on Base)
+python/       fractalai-pqc-verify: the same offline verifier + 7 conformance vectors for Python agents
 docs/          MIDAS signed alerts, key rotation / directory design, rescue vault V2, FRC-55R asset layer,
                Arbitrum anchor design, x402 catalog snapshot
 ```
@@ -58,6 +59,26 @@ cd conformance && npm install && node src/check.mjs   # → CONFORMANT — 7/7 p
 Fail-closed by design: a valid signature only proves *some* key signed the bytes. `valid` is true only when the signature
 verifies **and** the key is in your trusted set (the anchored key directory). Every profile ships a genuine, a tampered and a
 different-key forgery vector.
+
+### Python (LangChain, CrewAI, any Python agent)
+
+`python/` holds `fractalai-pqc-verify`, a 1:1 Python port of the verifier and the conformance suite (same JCS
+canonicalization, same domain separation, same fail-closed rule). Not on PyPI yet; install from this repo:
+
+```bash
+pip install "git+https://github.com/johnInarti/pqc-receipts-colosseum.git#subdirectory=python"
+fractalai-verify midas          # verifies public receipt fe62b072… end to end
+fractalai-verify conformance    # → CONFORMANT — 7/7 profiles
+```
+
+```python
+from fractalai_pqc_verify import fetch_key_directory, verify_receipt
+result = verify_receipt(receipt, fetch_key_directory())   # valid only if signature OK AND key active
+```
+
+ML-DSA-65 backend: pure-Python `dilithium-py` by default, optional PQClean C backend via `pqcrypto`
+(`[fast]`); tests cross-check both against the production signer. Not a CMVP-validated module. Tool examples for
+LangChain and CrewAI are in `python/examples/` (neither framework is a dependency). Details: `python/README.md`.
 
 ### Anchor contract
 
@@ -103,7 +124,7 @@ the Sentinel asset; `PQCReceiptAnchor.sol` and the anchor verifier; the conforma
 
 ## License
 
-Apache-2.0 for code in `verifier/` and `conformance/`; MIT for `contracts/` (SPDX headers in each file).
+Apache-2.0 for code in `verifier/`, `conformance/` and `python/`; MIT for `contracts/` (SPDX headers in each file).
 Docs © 2026 FRACTAL AI S.A.S., shared for review.
 
 Contact: softnextceo@gmail.com · https://fractalai.net.co

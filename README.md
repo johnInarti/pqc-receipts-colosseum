@@ -101,6 +101,16 @@ optimizer 200 runs, viaIR, cancun. Total cost of both deployments + anchors: und
 `scripts/deploy-pqc-receipt-anchor.js` and `scripts/anchor-public-receipt.js`. Keys are read from the environment only.
 Full record with every tx: `docs/ARC-PQC-RECEIPT-ANCHOR.md` and `deployments/anchors/PQCReceiptAnchor-5042-fe62b072.json`.
 
+## Use it in CI (GitHub Action)
+
+```yaml
+- uses: johnInarti/pqc-receipt-verify-action@v1
+  with:
+    receipt: fe62b072c2740e7a8d10cf7e643905b7d79f3f9b19f1c3970fc8754f18d538ee
+```
+Fail-closed: the step fails if the ML-DSA-65 signature, the receipt id or the key trust does not check out.
+Source and tests: https://github.com/johnInarti/pqc-receipt-verify-action
+
 ## Development history disclosure (Colosseum rule)
 
 Colosseum judges only the work done between **Sept 14 and Oct 12, 2026** and requires disclosure of pre-existing code.

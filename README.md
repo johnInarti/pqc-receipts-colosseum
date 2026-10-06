@@ -74,6 +74,12 @@ done offline). No owner, no funds, no upgrade. **Deployed on two mainnets on 202
 ABIs and full records: `deployments/`. Source is not yet verified on Arbiscan (no API key); bytecode matches `solc 0.8.24`,
 optimizer 200 runs, viaIR, cancun. Total cost of both deployments + anchors: under US$0.05.
 
+### Reproduce the Arc deployment
+
+`scripts/cctp-bridge-base-to-arc.mjs` (CCTP v2 + Circle Forwarding Service, Base → Arc, 16 s end to end),
+`scripts/deploy-pqc-receipt-anchor.js` and `scripts/anchor-public-receipt.js`. Keys are read from the environment only.
+Full record with every tx: `docs/ARC-PQC-RECEIPT-ANCHOR.md` and `deployments/anchors/PQCReceiptAnchor-5042-fe62b072.json`.
+
 ## Development history disclosure (Colosseum rule)
 
 Colosseum judges only the work done between **Sept 14 and Oct 12, 2026** and requires disclosure of pre-existing code.

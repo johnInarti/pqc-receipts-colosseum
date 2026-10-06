@@ -1,0 +1,12 @@
+{
+  "name": "pqc-receipts-colosseum-verifier",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline verifier for FractalAI post-quantum (ML-DSA-65 / FIPS 204) signed x402 receipts and MIDAS alerts, plus the Arbitrum anchor check. No network needed except the RPC you choose.",
+  "bin": { "x402-verify-anchor": "./src/verify-anchor.mjs" },
+  "scripts": { "test": "node --test test/*.test.mjs", "verify-alert": "node verify-midas-alert.mjs" },
+  "engines": { "node": ">=18" },
+  "license": "Apache-2.0",
+  "dependencies": { "@noble/post-quantum": "^0.6.1" }
+}

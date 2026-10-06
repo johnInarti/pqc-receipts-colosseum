@@ -1,0 +1,8 @@
+# Comando exacto para el fundador (requiere `gh auth login` como johnInarti). Crea el repo público y empuja este directorio.
+cd /Users/johneomo/.claude/jobs/40dd5ee6/tmp/colosseum-public-repo \
+ && git init -b main \
+ && git add -A \
+ && git commit -m "pqc-receipts-colosseum: PQC-signed x402 receipts + MIDAS alerts — verifier, conformance vectors, anchor contract (Crypto World's Fair 2026)" \
+ && gh repo create johnInarti/pqc-receipts-colosseum --public --source=. --remote=origin --push \
+      --description "FractalAI — post-quantum (ML-DSA-65 / FIPS 204) signed receipts and risk alerts for agent payments. Offline verifier, golden vectors, Arbitrum/Base anchor contracts. Colosseum Crypto World's Fair 2026."
+# Luego pegar en el formulario de Colosseum:  https://github.com/johnInarti/pqc-receipts-colosseum

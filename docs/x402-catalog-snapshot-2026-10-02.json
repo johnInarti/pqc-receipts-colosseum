@@ -1,0 +1,634 @@
+{
+  "x402Version": 2,
+  "openapi": "https://fractalai.net.co/openapi.json",
+  "discovery": {
+    "self": "https://fractalai.net.co/.well-known/x402",
+    "json": "https://fractalai.net.co/.well-known/x402.json",
+    "openapi": "https://fractalai.net.co/openapi.json",
+    "note": "Machine catalog of x402-native, pay-per-call post-quantum (ML-DSA-65 / Dilithium-3, NIST FIPS 204) proof services. Every paid response carries an offline-verifiable ML-DSA-65 receipt; fetch provider.receipts.public_key_url to verify third-party. Pre-pilot: live on Base mainnet, low volume."
+  },
+  "provider": {
+    "name": "FractalAI Network",
+    "url": "https://fractalai.net.co",
+    "description": "AI-native Layer 1 blockchain in Rust with post-quantum cryptography (CRYSTALS-Dilithium / NIST FIPS 204). These x402 endpoints sell post-quantum proof, decision-attestation, provenance, Know-Your-Agent identity verification, CBOM (cryptographic inventory) sealing and PQC signature verification services to autonomous agents. Sovereign self-facilitated (EIP-3009 gasless) with a facilitator-less txHash fallback.",
+    "twitter": "FractalAIChain",
+    "email": "helloinvestor@fractalai.net.co",
+    "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+    "facilitator": "self",
+    "settlementModes": [
+      "eip3009",
+      "txHash"
+    ],
+    "examples": {
+      "description": "Runnable code showing an autonomous agent signing the EIP-3009 authorization itself and paying a resource below, no human approval step.",
+      "langchain": "https://github.com/johnInarti/FRACTAL-AI/tree/main/examples/langchain-x402-autopay"
+    },
+    "receipts": {
+      "description": "Every paid response carries a verifiable_receipt binding payment to the delivered result. Receipts are additionally signed with ML-DSA-65 (NIST FIPS 204); fetch the public key to verify third-party.",
+      "signature_algorithm": "ml-dsa-65",
+      "public_key_url": "https://fractalai.net.co/api/x402/receipt-key"
+    }
+  },
+  "resources": [
+    {
+      "type": "http",
+      "resource": "https://fractalai.net.co/api/x402/sign",
+      "method": "POST",
+      "lastUpdated": "2026-08-25T00:00:00Z",
+      "accepts": [
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "20000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "20000",
+          "networkLegacy": "base"
+        },
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "20000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "20000"
+        }
+      ],
+      "extensions": {
+        "bazaar": {
+          "description": "Pay-per-Proof: one post-quantum ML-DSA-65 / Dilithium-3 (NIST FIPS 204) signature over your message or hash. Resistant to known classical and quantum attacks per NIST, not unbreakable. Proves the exact bytes were signed by this server's PQC key; says nothing about their truthfulness.",
+          "price": "$0.02",
+          "category": "cryptography",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string",
+                "description": "Arbitrary UTF-8 string; we sign sha256(message)."
+              },
+              "hash": {
+                "type": "string",
+                "description": "Hex digest you already computed; signed directly. Provide message OR hash."
+              }
+            }
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "digest": {
+                "type": "string"
+              },
+              "signature": {
+                "type": "string",
+                "description": "Base64 ML-DSA-65 / Dilithium-3 (NIST FIPS 204) signature (3309 bytes) over the domain-separated message FRACTALAI-x402-served-v1\\nx402-sign\\n<digest>."
+              },
+              "algorithm": {
+                "type": "string"
+              },
+              "public_key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "digest",
+              "signature",
+              "algorithm",
+              "public_key"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "http",
+      "resource": "https://fractalai.net.co/api/x402/attest-decision",
+      "method": "POST",
+      "lastUpdated": "2026-08-25T00:00:00Z",
+      "accepts": [
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "50000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "50000",
+          "networkLegacy": "base"
+        },
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "50000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "50000"
+        }
+      ],
+      "extensions": {
+        "bazaar": {
+          "description": "Seals a declared AI decision: returns a served ML-DSA-65 / Dilithium-3 (NIST FIPS 204) signature verifiable OFFLINE, chains it into an append-only Black Box, and attempts an on-chain anchor (VAID-1, Dilithium-2). Returns a re-verifiable attestation receipt. Notarizes the declared decision as submitted; it does not judge whether the decision was correct.",
+          "price": "$0.05",
+          "category": "ai-governance"
+        }
+      }
+    },
+    {
+      "type": "http",
+      "resource": "https://fractalai.net.co/api/x402/seal",
+      "method": "POST",
+      "lastUpdated": "2026-08-25T00:00:00Z",
+      "accepts": [
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "50000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "50000",
+          "networkLegacy": "base"
+        },
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "50000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "50000"
+        }
+      ],
+      "extensions": {
+        "bazaar": {
+          "description": "Post-quantum provenance seal: bundles a fresh drand (League of Entropy) round that cannot be backdated with a served ML-DSA-65 / Dilithium-3 (FIPS 204) signature verifiable OFFLINE and an on-chain anchor attempt (Dilithium-2) over your artifact hash. Returns a re-verifiable, timestamped provenance record (useful for EU AI Act Art. 10 & 53 training-data provenance). It is a provenance seal, not a content audit.",
+          "price": "$0.05",
+          "category": "provenance"
+        }
+      }
+    },
+    {
+      "type": "http",
+      "resource": "https://fractalai.net.co/api/x402/verify-agent",
+      "method": "POST",
+      "lastUpdated": "2026-08-25T00:00:00Z",
+      "accepts": [
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "30000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "30000",
+          "networkLegacy": "base"
+        },
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "30000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "30000"
+        }
+      ],
+      "extensions": {
+        "bazaar": {
+          "description": "Know Your Agent: verifies another agent's post-quantum identity + scope credential — signature, integrity and expiry — plus a live FRC-55 on-chain reputation read, and returns a served ML-DSA-65 / Dilithium-3 (FIPS 204) verdict verifiable OFFLINE. ERC-8004-aligned. Proves the operator declared this identity + scope; it does not prove runtime behavior, nor that the operator is a legitimate entity (that is operator KYC). Reputation, when shown, is a live registry read, not an endorsement.",
+          "price": "$0.03",
+          "category": "identity",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "credential": {
+                "type": "object",
+                "description": "A FractalAI KYA credential ({ claim, signature, public_key, credential_id }) to verify. Or send the credential as the body itself."
+              },
+              "check_reputation": {
+                "type": "boolean",
+                "description": "Optional (default true): re-read live FRC-55 on-chain reputation."
+              }
+            }
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "valid": {
+                "type": "boolean"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "claim": {
+                "type": "object"
+              },
+              "not_expired": {
+                "type": "boolean"
+              },
+              "reputation": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "valid",
+              "stage",
+              "reason"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "http",
+      "resource": "https://fractalai.net.co/api/x402/seal-cbom",
+      "method": "POST",
+      "lastUpdated": "2026-08-25T00:00:00Z",
+      "accepts": [
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "50000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "50000",
+          "networkLegacy": "base"
+        },
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "50000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "50000"
+        }
+      ],
+      "extensions": {
+        "bazaar": {
+          "description": "Seals a CycloneDX CBOM (ECMA-424 Cryptographic Bill of Materials) with a served ML-DSA-65 / Dilithium-3 (FIPS 204) signature verifiable OFFLINE plus a Dilithium-2 .cbomseal certificate and a drand (League of Entropy) lower-bound timestamp that cannot be backdated. Returns a re-verifiable .cbomseal plus an informational PQC-readiness breakdown. Built for CNSA 2.0 / OMB M-23-02 crypto-posture disclosure. It seals your declared inventory; it does not audit it or certify PQC-readiness.",
+          "price": "$0.05",
+          "category": "cryptography",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "cbom": {
+                "type": "object",
+                "description": "The CycloneDX CBOM (ECMA-424) as a JSON object or JSON string."
+              },
+              "issuer": {
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "analyze": {
+                "type": "boolean",
+                "description": "Include the informational PQC-readiness breakdown (default true)."
+              }
+            },
+            "required": [
+              "cbom"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "seal": {
+                "type": "object"
+              },
+              "readiness": {
+                "type": "object"
+              },
+              "verify_drand_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "seal"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "http",
+      "resource": "https://fractalai.net.co/api/x402/attest-training",
+      "method": "POST",
+      "lastUpdated": "2026-08-25T00:00:00Z",
+      "accepts": [
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "50000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "50000",
+          "networkLegacy": "base"
+        },
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "50000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "50000"
+        }
+      ],
+      "extensions": {
+        "bazaar": {
+          "description": "Seals the provenance of a dataset or training run: a served ML-DSA-65 / Dilithium-3 (FIPS 204) signature verifiable OFFLINE over a C2PA-compatible manifest (Dilithium-2 cert) binding the dataset/model-artifact hash to a declared origin. Privacy-preserving (only the sha256 hash is bound; raw data never stored). Built for EU AI Act Art. 10/53 training-data provenance. It records the issuer's declaration; it does not verify the data is lawful, consented, unbiased, or actually used to train anything.",
+          "price": "$0.05",
+          "category": "provenance",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "dataset": {
+                "type": "string",
+                "description": "Raw dataset/training content; we bind sha256(dataset). Provide dataset OR dataset_hash."
+              },
+              "dataset_hash": {
+                "type": "string",
+                "description": "Precomputed sha256 hex digest; bound as-is (privacy-preserving)."
+              },
+              "model_id": {
+                "type": "string",
+                "description": "Model/dataset identifier. Required."
+              },
+              "issuer": {
+                "type": "string"
+              },
+              "content_type": {
+                "type": "string"
+              },
+              "prompt": {
+                "type": "string",
+                "description": "Optional context; stored only as a hash."
+              }
+            },
+            "required": [
+              "model_id"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "manifest": {
+                "type": "object"
+              },
+              "verify_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "manifest"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "http",
+      "resource": "https://fractalai.net.co/api/x402/verify-proof",
+      "method": "POST",
+      "lastUpdated": "2026-08-25T00:00:00Z",
+      "accepts": [
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "10000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "10000",
+          "networkLegacy": "base"
+        },
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "10000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "10000"
+        }
+      ],
+      "extensions": {
+        "bazaar": {
+          "description": "Verifies a post-quantum signature over a message against a public key — auto-detects ML-DSA-65 / Dilithium-3 or Dilithium-2 / ML-DSA-44-class by size — and returns a served ML-DSA-65 / Dilithium-3 verdict verifiable OFFLINE. A generic machine-to-machine PQC proof primitive priced at the $0.01 floor. A valid verdict proves only that the signature checks out for exactly this message and public key; it says nothing about who owns the key or the truthfulness of the message.",
+          "price": "$0.01",
+          "category": "cryptography",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string",
+                "description": "UTF-8 message that was signed. Provide message OR message_b64."
+              },
+              "message_b64": {
+                "type": "string",
+                "description": "Base64 of the exact signed bytes (e.g. as produced by /api/x402/sign)."
+              },
+              "signature": {
+                "type": "string",
+                "description": "Base64 signature (ML-DSA-65 3309B or Dilithium-2 2420B; auto-detected). Required."
+              },
+              "public_key": {
+                "type": "string",
+                "description": "Base64 public key (ML-DSA-65 1952B or Dilithium-2 1312B; auto-detected). Required."
+              }
+            },
+            "required": [
+              "signature",
+              "public_key"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "valid": {
+                "type": "boolean"
+              },
+              "algorithm": {
+                "type": "string"
+              },
+              "message_b64": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "valid",
+              "algorithm"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "http",
+      "resource": "https://fractalai.net.co/api/x402/witness",
+      "method": "POST",
+      "lastUpdated": "2026-09-21T00:00:00Z",
+      "accepts": [
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "5000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "5000",
+          "networkLegacy": "base"
+        },
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+          "maxAmountRequired": "5000",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "USD Coin",
+            "version": "2",
+            "decimals": 6,
+            "assetTransferMethod": "eip3009"
+          },
+          "amount": "5000"
+        }
+      ],
+      "extensions": {
+        "bazaar": {
+          "description": "FractalAI Notary: an INDEPENDENT ML-DSA-65 / Dilithium-3 (FIPS 204) attestation that a given x402 settlement (on ANY resource, ours or a third party's) actually happened on-chain as claimed. When seal_body.transaction is supplied, independently re-derives the transfer from Base RPC and refuses to sign if the claimed asset/payTo/amount don't match what actually landed on-chain — this is not a rubber stamp. Base mainnet only in this version; other networks are refused as UNCHECKABLE.",
+          "price": "$0.005",
+          "category": "cryptography",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "seal_body": {
+                "type": "object",
+                "description": "Unsigned settlement-seal body (schema, resource, scheme, network, asset, payTo, amount, payer, transaction, success, response_sha256, sealed_at) — see @fractalai/x402-pqc-witness buildSealBody()."
+              }
+            },
+            "required": [
+              "seal_body"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "seal": {
+                "type": "object",
+                "description": "Independently FractalAI-signed ML-DSA-65 attestation of the settlement."
+              },
+              "payment": {
+                "type": "object",
+                "description": "This call's own settlement receipt."
+              }
+            },
+            "required": [
+              "seal"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

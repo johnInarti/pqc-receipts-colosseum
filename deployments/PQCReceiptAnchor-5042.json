@@ -1,0 +1,302 @@
+{
+  "contract": "PQCReceiptAnchor",
+  "address": "0x1f0d2774943250A7EB179e960203ea86319a8181",
+  "chainId": 5042,
+  "network": "arc",
+  "deployer": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+  "txHash": "0xa5b2b9acc0379aab20882de7a90e416dd81106efb26b8e81ef90ba4560d18f47",
+  "blockNumber": 24072431,
+  "deployedAt": "2026-10-03T15:40:06.193Z",
+  "explorer": "https://explorer.arc.io/address/0x1f0d2774943250A7EB179e960203ea86319a8181",
+  "gasUsed": "357471",
+  "effectiveGasPrice": "24000000000",
+  "deployCostNative": "0.008579304 USDC",
+  "compiler": {
+    "solc": "0.8.24",
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    },
+    "viaIR": true,
+    "evmVersion": "cancun"
+  },
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "receiptId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "AlreadyAnchored",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "EmptyBatch",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "LengthMismatch",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint64",
+          "name": "observedAt",
+          "type": "uint64"
+        },
+        {
+          "internalType": "uint256",
+          "name": "blockTimestamp",
+          "type": "uint256"
+        }
+      ],
+      "name": "ObservedAtInFuture",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ZeroPayloadHash",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ZeroReceiptId",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "receiptId",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "payloadHash",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "kid",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "observedAt",
+          "type": "uint64"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "anchoredBy",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "anchoredAt",
+          "type": "uint256"
+        }
+      ],
+      "name": "ReceiptAnchored",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "MAX_FUTURE_SKEW",
+      "outputs": [
+        {
+          "internalType": "uint64",
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "receiptId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "payloadHash",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "kid",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint64",
+          "name": "observedAt",
+          "type": "uint64"
+        }
+      ],
+      "name": "anchor",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32[]",
+          "name": "receiptIds",
+          "type": "bytes32[]"
+        },
+        {
+          "internalType": "bytes32[]",
+          "name": "payloadHashes",
+          "type": "bytes32[]"
+        },
+        {
+          "internalType": "bytes32[]",
+          "name": "kids",
+          "type": "bytes32[]"
+        },
+        {
+          "internalType": "uint64[]",
+          "name": "observedAts",
+          "type": "uint64[]"
+        }
+      ],
+      "name": "anchorBatch",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "receiptId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "anchoredAt",
+      "outputs": [
+        {
+          "internalType": "uint64",
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "receiptId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getAnchor",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "bytes32",
+              "name": "payloadHash",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "kid",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "uint64",
+              "name": "observedAt",
+              "type": "uint64"
+            },
+            {
+              "internalType": "uint64",
+              "name": "anchoredAt",
+              "type": "uint64"
+            },
+            {
+              "internalType": "address",
+              "name": "anchoredBy",
+              "type": "address"
+            }
+          ],
+          "internalType": "struct PQCReceiptAnchor.AnchorRecord",
+          "name": "",
+          "type": "tuple"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "receiptId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "isAnchored",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "totalAnchored",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "anchors": [
+    {
+      "receipt": "fe62b072c2740e7a8d10cf7e643905b7d79f3f9b19f1c3970fc8754f18d538ee",
+      "scheme": "fractalai.pqc-receipt-anchor/1",
+      "chain_id": 5042,
+      "contract": "0x1f0d2774943250A7EB179e960203ea86319a8181",
+      "tx_hash": "0x31979b7fa0a6605ea4ac9380051c92ad6b6e222fc39ada10ea46e655eab86b64",
+      "log_index": 5,
+      "block_number": 24072596,
+      "status": "confirmed",
+      "receipt_id": "0xb9b47ba81d30d95a087ac40b4d7c1c07816148251c147121e7c4aac477cd94eb",
+      "payload_hash": "0xef737f1ca8d99fabf58a81373188cc349183bfc8976c1ae3d3861238b498e065",
+      "kid": "0x86c139c960bb274c000000000000000000000000000000000000000000000000",
+      "observed_at": 1790473960,
+      "anchored_by": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+      "anchored_at": 1791042087,
+      "explorer_tx": "https://explorer.arc.io/tx/0x31979b7fa0a6605ea4ac9380051c92ad6b6e222fc39ada10ea46e655eab86b64",
+      "gasUsed": "136658",
+      "cost": "0.00273316141782675 USDC"
+    }
+  ]
+}

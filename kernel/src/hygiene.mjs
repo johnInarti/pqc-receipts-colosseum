@@ -256,20 +256,34 @@ export async function boundedFetch(url, { method = 'GET', headers = {}, body, ti
   }
   const ctl = new AbortController();
   let timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; ctl.abort(new Error(`deadline ${timeoutMs} ms`)); }, timeoutMs);
-  try {
+  let rejectDeadline;
+  // The deadline is enforced by RACING it (not only by abort propagation): some transports do not reject a
+  // pending body read when the signal fires after the headers arrived, which used to hang the verifier.
+  const deadline = new Promise((_, rej) => { rejectDeadline = rej; });
+  deadline.catch(() => {});
+  const timer = setTimeout(() => {
+    timedOut = true;
+    ctl.abort(new Error(`deadline ${timeoutMs} ms`));
+    rejectDeadline(new KernelError(C.RPC_ERROR, `timeout after ${timeoutMs} ms (${oneLine(u.origin, 120)})`));
+  }, timeoutMs);
+  let reader = null;
+  const work = (async () => {
     const res = await fetchImpl(url, { method, headers, body, signal: ctl.signal, redirect: 'error' });
     if (!res || typeof res !== 'object') throw new KernelError(C.RPC_ERROR, 'no response');
     if (!res.ok) { try { await res.body?.cancel?.(); } catch { /* ignore */ } throw new KernelError(C.RPC_ERROR, `HTTP ${res.status} from ${oneLine(u.origin, 120)}`); }
+    const ctype = res.headers?.get?.('content-type');
+    if (typeof ctype === 'string' && ctype !== '' && !/^application\/([a-z0-9.+-]*\+)?json\b/i.test(ctype.trim())) throw new KernelError(C.RPC_ERROR, `unexpected content-type ${oneLine(ctype, 60)} (want application/json)`);
     const len = Number(res.headers?.get?.('content-length'));
     if (Number.isFinite(len) && len > maxBytes) throw new KernelError(C.JSON_TOO_LARGE, `response larger than ${maxBytes} bytes`);
-    // Mocks / replay transports may only implement text() or json(); real fetch exposes a stream.
-    if (res.body && typeof res.body[Symbol.asyncIterator] === 'function') {
+    if (res.body && typeof res.body.getReader === 'function') {
+      reader = res.body.getReader();
       const chunks = []; let total = 0;
-      for await (const ch of res.body) {
-        total += ch.byteLength;
-        if (total > maxBytes) { ctl.abort(); throw new KernelError(C.JSON_TOO_LARGE, `response larger than ${maxBytes} bytes`); }
-        chunks.push(ch);
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > maxBytes) throw new KernelError(C.JSON_TOO_LARGE, `response larger than ${maxBytes} bytes`);
+        chunks.push(value);
       }
       const all = new Uint8Array(total); let o = 0; for (const ch of chunks) { all.set(ch, o); o += ch.byteLength; }
       return new TextDecoder('utf-8', { fatal: false }).decode(all);
@@ -281,12 +295,18 @@ export async function boundedFetch(url, { method = 'GET', headers = {}, body, ti
     }
     if (typeof res.json === 'function') return JSON.stringify(await res.json());
     throw new KernelError(C.RPC_ERROR, 'response has no body');
+  })();
+  work.catch(() => {});
+  try {
+    return await Promise.race([work, deadline]);
   } catch (e) {
     if (e instanceof KernelError) throw e;
     if (timedOut) throw new KernelError(C.RPC_ERROR, `timeout after ${timeoutMs} ms (${oneLine(u.origin, 120)})`);
     throw new KernelError(C.RPC_ERROR, `fetch ${oneLine(u.origin, 120)} failed: ${oneLine(e?.message ?? e, 200)}`);
   } finally {
     clearTimeout(timer);
+    if (reader) { try { reader.cancel().catch(() => {}); } catch { /* ignore */ } }
+    if (!ctl.signal.aborted) { /* completed normally */ } 
   }
 }
 

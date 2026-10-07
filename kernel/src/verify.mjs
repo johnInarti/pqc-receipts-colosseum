@@ -55,7 +55,7 @@ function normalizePolicy(p = {}) {
  *   policy              { require, allowTestnetAnchors, requireKnownAnchorer, minConfirmations, rpcQuorum, maxClockSkewSec }
  *   now, fetchImpl, timeoutMs, allowObjectInput
  */
-export async function verify(input, opts = {}) {
+function* core(input, opts) {
   const v = {
     kernel: KERNEL_ID, spec_version: SPEC_VERSION, kind: null, valid: false,
     levels: { integrity: false, authentic: false, trusted: false, time_anchored: null, finalized: null },
@@ -124,23 +124,10 @@ export async function verify(input, opts = {}) {
       if (opts.solanaSigners) v.overrides.push('solanaSigners');
       const roots = opts.roots ?? BAKED_ROOTS;
       const ids = anchorIds(parsed);
-      for (const ref of refs) {
-        const rec = { ref: null, ok: false, counts: false, facts: null, reason: null };
-        try {
-          if (!isPlainObject(ref)) throw new KernelError(C.ANCHOR_REF_MALFORMED, 'anchor reference is not an object');
-          const isSol = ref.chain === 'solana';
-          rec.ref = isSol ? `solana:${ref.cluster}` : `eip155:${ref.chain_id}`;
-          const ctx = { roots, ids, signedTime: parsed.signed_time, policy, fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs, rpcUrls: opts.rpc?.[rec.ref], solanaSigners: opts.solanaSigners };
-          const f = isSol ? await verifySolanaAnchor(ref, ctx) : await verifyEvmAnchor(ref, ctx);
-          rec.ok = true; rec.facts = f;
-          if (f.network_class !== 'production' && !policy.allowTestnetAnchors) throw new KernelError(C.ANCHOR_TESTNET_NOT_ALLOWED, `${rec.ref} is a test network; policy.allowTestnetAnchors is false`);
-          if (policy.requireKnownAnchorer && !f.anchorer_known) throw new KernelError(C.ANCHOR_ANCHORER_UNKNOWN, `anchored by ${f.anchored_by}, not a known FractalAI anchorer`);
-          rec.counts = true;
-        } catch (e) {
-          const code = e instanceof KernelError ? e.code : C.INTERNAL;
-          rec.reason = { code, detail: e instanceof KernelError ? e.detail : String(e?.message ?? e) };
-          v.reasons.push({ level: 'time_anchored', code, detail: `${rec.ref ?? 'anchor'}: ${rec.reason.detail}` });
-        }
+      const recs = yield { refs, base: { roots, ids, signedTime: parsed.signed_time, policy, fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs, rpc: opts.rpc, solanaSigners: opts.solanaSigners } };
+      if (recs === null) v.reasons.push({ level: 'time_anchored', code: C.NO_ANCHOR, detail: 'offline (synchronous) verification does not evaluate anchors — use verify()' });
+      for (const rec of recs || []) {
+        if (rec.reason) v.reasons.push({ level: 'time_anchored', code: rec.reason.code, detail: `${rec.ref ?? 'anchor'}: ${rec.reason.detail}` });
         v.anchors.push(rec);
       }
       const counted = v.anchors.filter((a) => a.counts);
@@ -194,4 +181,44 @@ export async function verify(input, opts = {}) {
     reason('integrity', e);
     return finish();
   }
+}
+
+/** Evaluate anchor references (network). Each record: { ref, ok, counts, facts, reason }. */
+async function evaluateAnchors({ refs, base }) {
+  const out = [];
+  for (const ref of refs) {
+    const rec = { ref: null, ok: false, counts: false, facts: null, reason: null };
+    try {
+      if (!isPlainObject(ref)) throw new KernelError(C.ANCHOR_REF_MALFORMED, 'anchor reference is not an object');
+      const isSol = ref.chain === 'solana';
+      rec.ref = isSol ? `solana:${ref.cluster}` : `eip155:${ref.chain_id}`;
+      const ctx = { ...base, rpcUrls: base.rpc?.[rec.ref] };
+      const f = isSol ? await verifySolanaAnchor(ref, ctx) : await verifyEvmAnchor(ref, ctx);
+      rec.ok = true; rec.facts = f;
+      if (f.network_class !== 'production' && !base.policy.allowTestnetAnchors) throw new KernelError(C.ANCHOR_TESTNET_NOT_ALLOWED, `${rec.ref} is a test network; policy.allowTestnetAnchors is false`);
+      if (base.policy.requireKnownAnchorer && !f.anchorer_known) throw new KernelError(C.ANCHOR_ANCHORER_UNKNOWN, `anchored by ${f.anchored_by}, not a known FractalAI anchorer`);
+      rec.counts = true;
+    } catch (e) {
+      rec.reason = { code: e instanceof KernelError ? e.code : C.INTERNAL, detail: e instanceof KernelError ? e.detail : String(e?.message ?? e) };
+    }
+    out.push(rec);
+  }
+  return out;
+}
+
+/** Full verification (anchors evaluated over the network when requested). Never throws. */
+export async function verify(input, opts = {}) {
+  const it = core(input, opts || {});
+  let r = it.next();
+  while (!r.done) r = it.next(await evaluateAnchors(r.value));
+  return r.value;
+}
+
+/** Offline, synchronous verification: identical decision, anchors are never evaluated (time levels stay
+ * null, or false with NO_ANCHOR when the policy requires them). */
+export function verifySync(input, opts = {}) {
+  const it = core(input, opts || {});
+  let r = it.next();
+  while (!r.done) r = it.next(null);
+  return r.value;
 }

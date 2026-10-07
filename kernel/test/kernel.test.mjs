@@ -45,6 +45,20 @@ test('boundedFetch: a server that stalls mid-body hits ONE hard deadline (header
   s.close();
 });
 
+test('boundedFetch: deadline still fires when the stall outlasts the transport idle timers (regression)', async () => {
+  const s = await server((req, res) => { res.writeHead(200, { 'content-type': 'application/json' }); res.write('{'); });
+  const t0 = Date.now();
+  await assert.rejects(boundedFetch(s.url, { timeoutMs: 6000 }), (e) => e.code === CODES.RPC_ERROR && /timeout/.test(e.detail));
+  assert.ok(Date.now() - t0 < 9000);
+  s.close();
+});
+
+test('boundedFetch: non-JSON content-type refused', async () => {
+  const s = await server((req, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end('{}'); });
+  await assert.rejects(boundedFetch(s.url), (e) => e.code === CODES.RPC_ERROR && /content-type/.test(e.detail));
+  s.close();
+});
+
 test('boundedFetch: body cap enforced while streaming; redirects refused', async () => {
   const big = await server((req, res) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('['.padEnd(5000, ' ') + ']'); });
   await assert.rejects(boundedFetch(big.url, { maxBytes: 1000 }), (e) => e.code === CODES.JSON_TOO_LARGE);

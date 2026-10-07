@@ -1,7 +1,7 @@
 /**
  * @fractalai/pqc-trust-kernel — public API (spec/TRUST-KERNEL.md).
  */
-export { verify } from './verify.mjs';
+export { verify, verifySync } from './verify.mjs';
 export { KERNEL_ID, SPEC_VERSION, LEVELS, DEFAULT_REQUIRE, EXIT, C as CODES, KernelError } from './codes.mjs';
 export { BAKED_ROOTS } from './roots.mjs';
 export { SELF_TEST } from './selftest.mjs';

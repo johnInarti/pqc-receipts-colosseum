@@ -32,7 +32,7 @@ export function parseJsonStrict(input, limits = {}) {
   if (typeof input === 'string') text = input;
   else if (input instanceof Uint8Array) {
     if (input.length > L.MAX_JSON_BYTES) fail(C.JSON_TOO_LARGE, `input is ${input.length} bytes (> ${L.MAX_JSON_BYTES})`);
-    try { text = new TextDecoder('utf-8', { fatal: true }).decode(input); } catch { fail(C.JSON_INVALID, 'input is not valid UTF-8'); }
+    try { text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(input); } catch { fail(C.JSON_INVALID, 'input is not valid UTF-8'); }
   } else fail(C.JSON_INVALID, 'input is not text');
   // UTF-8 length bound (cheap upper bound first, exact second)
   if (text.length > L.MAX_JSON_BYTES || new TextEncoder().encode(text).length > L.MAX_JSON_BYTES) fail(C.JSON_TOO_LARGE, `input exceeds ${L.MAX_JSON_BYTES} bytes`);
@@ -286,7 +286,7 @@ export async function boundedFetch(url, { method = 'GET', headers = {}, body, ti
         chunks.push(value);
       }
       const all = new Uint8Array(total); let o = 0; for (const ch of chunks) { all.set(ch, o); o += ch.byteLength; }
-      return new TextDecoder('utf-8', { fatal: false }).decode(all);
+      try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(all); } catch { fail(C.JSON_INVALID, 'response body is not valid UTF-8'); } // BOM kept so parseJsonStrict rejects it (§8.1)
     }
     if (typeof res.text === 'function') {
       const t = await res.text();

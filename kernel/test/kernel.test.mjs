@@ -142,3 +142,19 @@ test('single source of trust: no native JSON.parse on untrusted input inside ker
     assert.equal(/JSON\.parse\(/.test(src), false, `${f.pathname} uses JSON.parse`);
   }
 });
+
+// §8.1: a leading UTF-8 BOM is rejected whether the receipt arrives as text or as raw bytes,
+// and a non-UTF-8 network body is a typed JSON_INVALID (never silently repaired).
+import { parseJsonStrict as _pjs, boundedFetch as _bf } from '../src/index.mjs';
+test('hygiene: BOM rejected as text and as bytes; invalid UTF-8 body rejected', async () => {
+  const assertRejects = (fn) => { let code; try { fn(); } catch (e) { code = e.code; } assert.equal(code, 'JSON_INVALID'); };
+  assertRejects(() => _pjs('﻿{}'));
+  assertRejects(() => _pjs(new Uint8Array([0xef, 0xbb, 0xbf, 0x7b, 0x7d])));
+  assertRejects(() => _pjs(new Uint8Array([0x7b, 0xff, 0x7d])));
+  const body = (bytes) => async () => ({ ok: true, status: 200, headers: new Map([['content-type', 'application/json']]), body: new ReadableStream({ start(c) { c.enqueue(bytes); c.close(); } }) });
+  for (const bytes of [new Uint8Array([0xef, 0xbb, 0xbf, 0x7b, 0x7d]), new Uint8Array([0x7b, 0xff, 0x7d])]) {
+    let code;
+    try { const t = await _bf('https://example.invalid/x', { fetchImpl: body(bytes) }); _pjs(t); } catch (e) { code = e.code; }
+    assert.equal(code, 'JSON_INVALID');
+  }
+});

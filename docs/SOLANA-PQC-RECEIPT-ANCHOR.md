@@ -110,3 +110,14 @@ firma es la pedida y que el pagador es la pubkey anunciada; (5) exactamente una 
 `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`, con el firmante entre sus cuentas y datos idénticos byte a byte al memo
 recalculado. Cualquier otra cosa → `INVALID` con motivo. Sin SDK de Solana: base58, formato de transacción y Ed25519
 (`node:crypto`) están en `verifier/src/solana-anchor.mjs` (~300 líneas auditables).
+
+## Trust Kernel v2 (2026-10-07)
+
+La verificación de este documento la decide ahora `kernel/` (especificación normativa: `spec/TRUST-KERNEL.md`,
+corpus adversarial: `corpus/`). Cambios relevantes: el contrato de anclaje se fija por `chainId → (dirección, code
+hash)` en `kernel/trust-roots.json` (una dirección traída por el sello se rechaza); la hora sale de la cabecera del
+bloque y `observedAt` debe ser igual a la hora FIRMADA; Solana exige génesis del cluster, `finalized` + `blockTime`,
+firmante anunciado y un único Memo v2 idéntico byte a byte; las redes de prueba quedan marcadas `test` y no cuentan
+como prueba de tiempo salvo `allowTestnetAnchors`; el ciclo de vida de la clave se evalúa en la hora firmada y una
+clave revocada solo vale con un anclaje anterior a `revoked_at`. Protocolo anti-squatting "anclar antes de publicar":
+spec §10. Límites (RPC/consenso, raíces fijadas por TOFU, sin auditoría externa, librería no CMVP): spec §11.

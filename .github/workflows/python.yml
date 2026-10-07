@@ -2,9 +2,9 @@ name: python verifier
 
 on:
   push:
-    paths: ["python/**", "conformance/vectors/**", ".github/workflows/python.yml"]
+    paths: ["python/**", "conformance/vectors/**", "corpus/**", "kernel/*.json", ".github/workflows/python.yml"]
   pull_request:
-    paths: ["python/**", "conformance/vectors/**", ".github/workflows/python.yml"]
+    paths: ["python/**", "conformance/vectors/**", "corpus/**", "kernel/*.json", ".github/workflows/python.yml"]
   workflow_dispatch:
 
 permissions:
@@ -37,6 +37,12 @@ jobs:
           python -m pytest -q -o markers="network: live" tests
           fractalai-verify conformance
           fractalai-verify midas
+      - name: Trust Kernel v2 corpus — the installed Python port must pass 100 %
+        run: python -m fractalai_pqc_verify.kernel.corpus corpus
+      - name: baked trust roots identical to the JS kernel
+        run: |
+          cmp kernel/trust-roots.json python/src/fractalai_pqc_verify/kernel/trust-roots.json
+          cmp kernel/checkpoint-directory.json python/src/fractalai_pqc_verify/kernel/checkpoint-directory.json
 
   examples:
     runs-on: ubuntu-latest

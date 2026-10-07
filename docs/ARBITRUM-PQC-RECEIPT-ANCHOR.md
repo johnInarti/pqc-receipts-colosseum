@@ -184,3 +184,14 @@ ningún otro poder).
 | Source verification | pending (no `ARBISCAN_KEY` in this environment): `cd smart-contracts && ARBISCAN_KEY=… npx hardhat verify --network arbitrumOne 0x3A23c614033cb22139DC13932524767c5fE841d8` |
 
 Re-check from any machine: `getAnchor(0xb9b47ba8…94eb)` on the contract returns the payloadHash/kid/observedAt above; the receipt itself is public at https://fractalai.net.co/api/midas/alerts/receipt/fe62b072c2740e7a8d10cf7e643905b7d79f3f9b19f1c3970fc8754f18d538ee and verifies in the browser at https://fractalai.net.co/midas/proof. Arbitrum Sepolia was not used (no faucet accepted a fresh wallet); mainnet gas was cheaper than the time.
+
+## Trust Kernel v2 (2026-10-07)
+
+La verificación de este documento la decide ahora `kernel/` (especificación normativa: `spec/TRUST-KERNEL.md`,
+corpus adversarial: `corpus/`). Cambios relevantes: el contrato de anclaje se fija por `chainId → (dirección, code
+hash)` en `kernel/trust-roots.json` (una dirección traída por el sello se rechaza); la hora sale de la cabecera del
+bloque y `observedAt` debe ser igual a la hora FIRMADA; Solana exige génesis del cluster, `finalized` + `blockTime`,
+firmante anunciado y un único Memo v2 idéntico byte a byte; las redes de prueba quedan marcadas `test` y no cuentan
+como prueba de tiempo salvo `allowTestnetAnchors`; el ciclo de vida de la clave se evalúa en la hora firmada y una
+clave revocada solo vale con un anclaje anterior a `revoked_at`. Protocolo anti-squatting "anclar antes de publicar":
+spec §10. Límites (RPC/consenso, raíces fijadas por TOFU, sin auditoría externa, librería no CMVP): spec §11.

@@ -55,3 +55,14 @@ ml_dsa65.verify(Buffer.from(r.signature, 'base64'), new TextEncoder().encode(r.s
 ## Piezas
 
 `frontend/lib/midas-alert-proof.ts` (canon + regla de disparo), `midas-alert-store.ts` (Postgres `midas_alert_subscriptions` / `midas_alerts_sent`, fallback en memoria), `midas-alert-delivery.ts` (webhook/email/telegram, SSRF), `app/api/midas/alerts/*`, `app/api/rpa/midas-alerts` (bucle, único sitio que usa `PROMETHEUS_ADMIN_TOKEN`), `.github/workflows/midas-alerts.yml` (cada 10 min) y `midas-alerts-smoke.yml` (prueba de punta a punta con vigilancia de operador).
+
+## Trust Kernel v2 (2026-10-07)
+
+La verificación de este documento la decide ahora `kernel/` (especificación normativa: `spec/TRUST-KERNEL.md`,
+corpus adversarial: `corpus/`). Cambios relevantes: el contrato de anclaje se fija por `chainId → (dirección, code
+hash)` en `kernel/trust-roots.json` (una dirección traída por el sello se rechaza); la hora sale de la cabecera del
+bloque y `observedAt` debe ser igual a la hora FIRMADA; Solana exige génesis del cluster, `finalized` + `blockTime`,
+firmante anunciado y un único Memo v2 idéntico byte a byte; las redes de prueba quedan marcadas `test` y no cuentan
+como prueba de tiempo salvo `allowTestnetAnchors`; el ciclo de vida de la clave se evalúa en la hora firmada y una
+clave revocada solo vale con un anclaje anterior a `revoked_at`. Protocolo anti-squatting "anclar antes de publicar":
+spec §10. Límites (RPC/consenso, raíces fijadas por TOFU, sin auditoría externa, librería no CMVP): spec §11.

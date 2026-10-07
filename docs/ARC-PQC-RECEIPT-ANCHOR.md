@@ -137,3 +137,14 @@ con unos céntimos de USDC en Arc (drop-in de systemd; **no activado aún en pro
   https://developers.circle.com/cctp/quickstarts/transfer-usdc-ethereum-to-arc · API `https://iris-api.circle.com/v2/burn/USDC/fees/6/26?forward=true`
   y `https://iris-api.circle.com/v2/messages/6?transactionHash=<burn>`
 - USDC: https://developers.circle.com/stablecoins/usdc-contract-addresses (Arc `0x3600…0000`, Base `0x8335…2913`)
+
+## Trust Kernel v2 (2026-10-07)
+
+La verificación de este documento la decide ahora `kernel/` (especificación normativa: `spec/TRUST-KERNEL.md`,
+corpus adversarial: `corpus/`). Cambios relevantes: el contrato de anclaje se fija por `chainId → (dirección, code
+hash)` en `kernel/trust-roots.json` (una dirección traída por el sello se rechaza); la hora sale de la cabecera del
+bloque y `observedAt` debe ser igual a la hora FIRMADA; Solana exige génesis del cluster, `finalized` + `blockTime`,
+firmante anunciado y un único Memo v2 idéntico byte a byte; las redes de prueba quedan marcadas `test` y no cuentan
+como prueba de tiempo salvo `allowTestnetAnchors`; el ciclo de vida de la clave se evalúa en la hora firmada y una
+clave revocada solo vale con un anclaje anterior a `revoked_at`. Protocolo anti-squatting "anclar antes de publicar":
+spec §10. Límites (RPC/consenso, raíces fijadas por TOFU, sin auditoría externa, librería no CMVP): spec §11.

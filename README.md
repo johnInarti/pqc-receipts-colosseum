@@ -26,20 +26,45 @@ the live endpoints listed below.
 Commercially the project is pre-revenue: **external paid demand to date ≈ US$0.16 from two unknown addresses, 0 paying
 subscribers, treasury 99.01 USDC**. One founder (Colombia), no employees, no prior institutional funding.
 
-## Verify a signed alert yourself (60 seconds, Node 18+)
+## Trust Kernel v2 — one decision, one specification, one adversarial corpus
+
+Every trust decision in this repository is made by **one** implementation, [`kernel/`](kernel/), specified normatively
+in [`spec/TRUST-KERNEL.md`](spec/TRUST-KERNEL.md) and pinned down by an executable specification,
+[`corpus/`](corpus/) (129 vectors: every proof of concept from four internal red-teams + real production positives).
+`verifier/`, `conformance/` and the Python package delegate to it or reproduce it; both the JavaScript kernel and the
+Python port pass the corpus at 100 %.
+
+- **Pinned trust roots** (`kernel/trust-roots.json`): the directory's governance key and its epoch-3 checkpoint, the
+  anchor contracts by chain id **and runtime code hash**, Solana genesis hashes. TLS is only a transport.
+- **Only what is signed**: the signed message is rebuilt from a fixed domain; unsigned copies (facts, emitted_at,
+  snapshot, ids) must match the signed bytes exactly; the receipt kind is chosen by the caller, never by the document.
+- **Leveled verdict**: `{integrity, authentic, trusted, time_anchored, finalized}` + `trust_basis` + coded reasons;
+  CLI exit code = first failed level.
+- **Time from consensus**: block header time, `observedAt` bound to the signed time, finality, multi-RPC agreement;
+  Solana: genesis, finalized + blockTime, local Ed25519, a single byte-exact memo. Test networks are marked.
+
+## Verify a signed alert yourself (60 seconds, Node 20+)
 
 ```bash
-cd verifier && npm install
-node verify-midas-alert.mjs            # verifies public receipt fe62b072… end to end
+cd kernel && npm install
+node bin/fractalai-verify.mjs fe62b072c2740e7a8d10cf7e643905b7d79f3f9b19f1c3970fc8754f18d538ee        # VALID, exit 0
+node bin/fractalai-verify.mjs ../deployments/anchors/PQCReceiptAnchor-5042-fe62b072.json --anchors \
+     --require integrity,authentic,trusted,time_anchored,finalized                                     # + Arc time proof
+cd ../corpus && npm install && node run.mjs --live                                                   # 129/129 + live 4/4
 ```
 
-It checks: `receipt_id == sha256(canonical)`, the domain-separated message
-`FRACTALAI-x402-served-v1\nmidas-alert\n<id>`, the ML-DSA-65 signature (`@noble/post-quantum`), and that the signing key is
-`active` in the epoch-chained directory. Pin the directory after the first run if you do not want to trust our TLS.
+The receipt is bound to the id you asked for, the signed message is rebuilt (never read from the receipt), the key
+directory must verify against the **pinned** governance key and checkpoint, and the key must be authorized for that
+receipt kind at the receipt's **signed** time. `verifier/verify-midas-alert.mjs` does the same through the
+compatibility layer.
 
 ## Repository layout
 
 ```
+spec/          TRUST-KERNEL.md — normative specification (threat model, algorithm, domain table, limits)
+kernel/        Trust Kernel v2 — the single reference implementation (+ CLI fractalai-verify, trust-roots.json)
+corpus/        adversarial + positive golden corpus (executable spec; JS and Python runners)
+redteam/       the red-team PoCs replayed against the kernel (run-all.sh)
 verifier/      offline verifiers (ML-DSA-65 seals, MIDAS alerts, EVM + Solana Memo anchor checks) + tests
 conformance/   neutral conformance suite + golden vectors for PQC-signed agent receipts (7 profiles: x402 served,
                x402 SAR, ACP verdict, RFC 9964 JOSE, W3C VC-DI, wg-identity HAI, A2A signed-receipts/v1)
@@ -134,6 +159,11 @@ the Sentinel asset; `PQCReceiptAnchor.sol` and the anchor verifier; the conforma
 - No revenue, users or TVL to speak of (≈ $0.16 external, 0 subscribers). MIDAS trades nothing (paper mode, 0 trades,
   directional model hit rate 46 %, `edge_detected:false`). Rescue V2 is opt-in, best-effort, 0 enrolments.
 - A signed receipt proves that specific bytes were signed by a specific key at a specific time — not that its content is true.
+- Trust Kernel v2 limits: without a light client the verifier believes the RPCs you configure (several must agree);
+  the governance key and checkpoint were pinned from our TLS-served directory on 2026-10-07 (trust on first use, the
+  on-chain directory anchor is still pending); Arbitrum/Arc/Solana block times carry their protocols' tolerances;
+  `@noble` / `dilithium-py` are not CMVP-validated modules; the kernel has had internal red-teams only, no external
+  audit. Details: `spec/TRUST-KERNEL.md` §11.
 
 ## License
 

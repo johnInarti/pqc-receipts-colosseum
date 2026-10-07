@@ -39,3 +39,14 @@ Los seeds **nunca salen del servidor**. Lo único que viaja es material público
 ## Lo que NO afirma
 
 El ancla on-chain del directorio sigue `tls-only` (`FractalCheckpoint` no lleva aún `keyDirectoryRoot`): la equivocación es detectable dada la clave de gobernanza pineada, no "trustless-of-TLS". `@noble/post-quantum` implementa el algoritmo FIPS 204; no es un módulo validado CMVP.
+
+## Trust Kernel v2 (2026-10-07)
+
+La verificación de este documento la decide ahora `kernel/` (especificación normativa: `spec/TRUST-KERNEL.md`,
+corpus adversarial: `corpus/`). Cambios relevantes: el contrato de anclaje se fija por `chainId → (dirección, code
+hash)` en `kernel/trust-roots.json` (una dirección traída por el sello se rechaza); la hora sale de la cabecera del
+bloque y `observedAt` debe ser igual a la hora FIRMADA; Solana exige génesis del cluster, `finalized` + `blockTime`,
+firmante anunciado y un único Memo v2 idéntico byte a byte; las redes de prueba quedan marcadas `test` y no cuentan
+como prueba de tiempo salvo `allowTestnetAnchors`; el ciclo de vida de la clave se evalúa en la hora firmada y una
+clave revocada solo vale con un anclaje anterior a `revoked_at`. Protocolo anti-squatting "anclar antes de publicar":
+spec §10. Límites (RPC/consenso, raíces fijadas por TOFU, sin auditoría externa, librería no CMVP): spec §11.

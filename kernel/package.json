@@ -1,0 +1,25 @@
+{
+  "name": "@fractalai/pqc-trust-kernel",
+  "version": "2.0.0",
+  "description": "Trust Kernel v2 — the single reference implementation of FractalAI's post-quantum (ML-DSA-65 / FIPS 204) receipt verification: pinned trust roots, epoch-chained key directory with anti-rollback, domain↔use↔route binding, consensus time proofs (EVM + Solana), leveled verdicts. Spec: spec/TRUST-KERNEL.md.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./hygiene": "./src/hygiene.mjs",
+    "./canon": "./src/canon.mjs",
+    "./crypto": "./src/crypto.mjs",
+    "./directory": "./src/directory.mjs",
+    "./solana-wire": "./src/anchors/solana-wire.mjs",
+    "./trust-roots.json": "./trust-roots.json"
+  },
+  "bin": { "fractalai-verify": "./bin/fractalai-verify.mjs" },
+  "files": ["src", "bin", "trust-roots.json", "README.md"],
+  "scripts": { "test": "node --test test/*.test.mjs" },
+  "engines": { "node": ">=18.17" },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@noble/curves": "~2.2.0",
+    "@noble/hashes": "~2.2.0",
+    "@noble/post-quantum": "~0.6.1"
+  }
+}

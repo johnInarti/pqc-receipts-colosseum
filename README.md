@@ -132,7 +132,7 @@ Full record with every tx: `docs/ARC-PQC-RECEIPT-ANCHOR.md` and `deployments/anc
 ## Use it in CI (GitHub Action)
 
 ```yaml
-- uses: johnInarti/pqc-receipt-verify-action@v1
+- uses: johnInarti/pqc-receipt-verify-action@v2
   with:
     receipt: fe62b072c2740e7a8d10cf7e643905b7d79f3f9b19f1c3970fc8754f18d538ee
 ```

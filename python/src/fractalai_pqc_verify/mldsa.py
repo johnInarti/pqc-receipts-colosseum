@@ -17,7 +17,10 @@ Neither is a FIPS 140-3 / CMVP validated module. Select with ``FRACTALAI_PQC_BAC
 """
 from __future__ import annotations
 
+import base64
+import json
 import os
+from importlib import resources
 from typing import Callable
 
 __all__ = ["PUBLIC_KEY_BYTES", "SIGNATURE_BYTES", "verify", "backend_name", "available_backends"]
@@ -51,11 +54,39 @@ def _pqcrypto() -> Callable[[bytes, bytes, bytes], bool]:
 _LOADERS = {"dilithium-py": _dilithium_py, "pqcrypto": _pqcrypto}
 
 
+class BackendSelfTestError(ImportError):
+    """The backend imported but failed the known-answer self-test (red-team F9)."""
+
+
+def _self_test(name: str, fn: Callable[[bytes, bytes, bytes], bool]) -> None:
+    """Known-answer test with the bundled golden vector: the backend MUST accept the genuine signature and
+    reject a bit-flipped signature and a different message. A shadowed/stubbed module (e.g. a `pqcrypto`
+    on sys.path whose verify() is a no-op returning None) therefore never becomes the verifier."""
+    v = json.loads((resources.files(__package__) / "vectors" / "x402-served.json").read_text("utf-8"))["valid"]
+    pk, sig, msg = base64.b64decode(v["public_key"]), base64.b64decode(v["signature"]), v["signed_message"].encode()
+    bad_sig = bytes([sig[0] ^ 1]) + sig[1:]
+
+    def ok(*a):
+        try:
+            return fn(*a) is True
+        except Exception:
+            return False
+
+    if not (ok(pk, msg, sig) and not ok(pk, msg, bad_sig) and not ok(pk, msg + b"x", sig)):
+        raise BackendSelfTestError(f"ML-DSA-65 backend {name!r} failed the known-answer self-test — refusing it")
+
+
+def _load(name: str) -> Callable[[bytes, bytes, bytes], bool]:
+    fn = _LOADERS[name]()
+    _self_test(name, fn)
+    return fn
+
+
 def available_backends() -> list[str]:
     out = []
-    for name, loader in _LOADERS.items():
+    for name in _LOADERS:
         try:
-            loader()
+            _load(name)
             out.append(name)
         except ImportError:
             pass
@@ -67,20 +98,20 @@ def _select(name: str | None) -> tuple[str, Callable[[bytes, bytes, bytes], bool
     if name == "auto":
         for candidate in ("pqcrypto", "dilithium-py"):
             try:
-                return candidate, _LOADERS[candidate]()
+                return candidate, _load(candidate)
             except ImportError:
                 continue
         raise ImportError("no ML-DSA-65 backend installed (pip install dilithium-py)")
     if name not in _LOADERS:
-        raise ValueError(f"unknown ML-DSA backend {name!r}; choose one of {sorted(_LOADERS)} or 'auto'")
-    return name, _LOADERS[name]()
+        raise LookupError(f"unknown ML-DSA backend {name!r}; choose one of {sorted(_LOADERS)} or 'auto'")
+    return name, _load(name)
 
 
 _cache: dict[str, tuple[str, Callable[[bytes, bytes, bytes], bool]]] = {}
 
 
 def _get(name: str | None):
-    key = name or os.environ.get("FRACTALAI_PQC_BACKEND") or "auto"
+    key = (name or os.environ.get("FRACTALAI_PQC_BACKEND") or "auto").strip().lower()
     if key not in _cache:
         _cache[key] = _select(name)
     return _cache[key]

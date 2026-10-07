@@ -13,15 +13,15 @@ run if you do not want to trust TLS.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
-import json
 import time
-import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from . import mldsa
+from ._safe import https_get_json, strict_json_loads
 from .jcs import canonicalize
 from .profiles import strict_b64
 
@@ -98,7 +98,9 @@ def verify_directory(
             return no("governance public key is not 1952 bytes (not ML-DSA-65)")
         if len(sig) != mldsa.SIGNATURE_BYTES:
             return no("governance signature is not 3309 bytes (not ML-DSA-65)")
-        keys = directory.get("keys") or []
+        keys = directory.get("keys")
+        if not isinstance(keys, list):  # red-team F11: parity with Node (null/""/0 is not an empty key set)
+            return no("directory keys is not a list")
         for k in keys:
             if k.get("kid") != kid_for_key(k.get("public_key_b64")):
                 return no(f"kid {k.get('kid')} != sha256(public_key)[:16] — forged/aliased kid")
@@ -127,11 +129,20 @@ def verify_directory(
         return no(f"verify error: {e}")
 
 
-def _as_int(v: Any) -> int | None:
-    try:
-        return None if v is None else int(v)
-    except (TypeError, ValueError):
+_UNPARSABLE = object()
+
+
+def _as_int(v: Any) -> Any:
+    """None/"None"/"" -> None (no expiry); an int or decimal-int string -> int; anything else -> _UNPARSABLE."""
+    if v is None or v == "None" or v == "":
         return None
+    if isinstance(v, bool):
+        return _UNPARSABLE
+    if isinstance(v, int):
+        return v
+    if isinstance(v, str) and v.strip().lstrip("-").isdigit():
+        return int(v)
+    return _UNPARSABLE
 
 
 @dataclass(frozen=True)
@@ -179,6 +190,8 @@ class KeyDirectory:
                 out.append(k["public_key_b64"])
             elif include_retiring and status == "retiring":
                 not_after = _as_int(k.get("not_after"))
+                if not_after is _UNPARSABLE:  # red-team F8b: garbage expiry is fail-closed, not "never"
+                    continue
                 if not_after is None or now <= not_after:
                     out.append(k["public_key_b64"])
         return out
@@ -195,6 +208,7 @@ def _check(
     default_basis: str,
     backend: str | None,
 ) -> KeyDirectory:
+    raw = copy.deepcopy(dict(raw))  # red-team F10: freeze what was verified (no TOCTOU via the caller's dict)
     v = verify_directory(raw, governance_key=governance_key, anchored_root=anchored_root, expected_prev_root=expected_prev_root, backend=backend)
     if not v.signature_valid:
         raise KeyDirectoryError(f"key directory rejected: {v.reason}")
@@ -224,11 +238,15 @@ def fetch_key_directory(
     """
     if not url.startswith("https://"):
         raise KeyDirectoryError("refusing non-HTTPS key directory URL")
-    req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (https enforced above)
-        raw = json.loads(resp.read().decode("utf-8"))
+    # red-team F6: no https->http redirect (the "tls" trust basis would be a lie), size cap, JSON only
+    try:
+        raw, final_url = https_get_json(url, user_agent=USER_AGENT, timeout=timeout)
+    except ValueError as e:
+        raise KeyDirectoryError(f"key directory fetch refused: {e}") from e
+    if not isinstance(raw, dict):
+        raise KeyDirectoryError("key directory is not a JSON object")
     return _check(
-        raw, url, governance_key=governance_key, anchored_root=anchored_root, expected_prev_root=expected_prev_root,
+        raw, final_url, governance_key=governance_key, anchored_root=anchored_root, expected_prev_root=expected_prev_root,
         require_authenticated=require_authenticated, default_basis="tls", backend=backend,
     )
 
@@ -246,7 +264,12 @@ def load_key_directory(
     if isinstance(source, Mapping):
         raw, name = source, "<dict>"
     else:
-        raw, name = json.loads(Path(source).read_text("utf-8")), str(source)
+        try:
+            raw, name = strict_json_loads(Path(source).read_text("utf-8")), str(source)
+        except ValueError as e:
+            raise KeyDirectoryError(f"key directory is not valid JSON: {e}") from e
+        if not isinstance(raw, dict):
+            raise KeyDirectoryError("key directory is not a JSON object")
     return _check(
         raw, name, governance_key=governance_key, anchored_root=anchored_root, expected_prev_root=expected_prev_root,
         require_authenticated=require_authenticated, default_basis="local-file", backend=backend,

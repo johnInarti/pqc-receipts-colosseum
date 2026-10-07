@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Mapping
 
 from . import mldsa
+from ._safe import strict_json_loads
 from .jcs import canonicalize
 
 __all__ = ["PROFILES", "VerificationResult", "normalize_trusted_keys", "verify_profile"]
@@ -58,17 +59,19 @@ class _Fail(Exception):
 
 def strict_b64(s: Any) -> bytes:
     """Canonical standard base64 only (no whitespace, right alphabet, length % 4 == 0)."""
-    if not isinstance(s, str) or len(s) % 4 != 0 or not _B64.match(s):
+    # fullmatch, not match: `$` also matches before a trailing "\n" (red-team F3)
+    if not isinstance(s, str) or len(s) % 4 != 0 or not _B64.fullmatch(s):
         raise ValueError("non-canonical base64")
     return base64.b64decode(s, validate=True)
 
 
 def strict_b64url(s: Any) -> bytes:
-    if not isinstance(s, str) or not _B64URL.match(s):
+    if not isinstance(s, str) or not _B64URL.fullmatch(s):
         raise ValueError("non-canonical base64url")
     pad = "" if len(s) % 4 == 0 else "=" * (4 - len(s) % 4)
     try:
-        return base64.urlsafe_b64decode(s + pad)
+        # validate=True: never silently drop characters outside the alphabet (red-team F3)
+        return base64.b64decode((s + pad).replace("-", "+").replace("_", "/"), validate=True)
     except binascii.Error as e:
         raise ValueError(f"bad base64url: {e}") from e
 
@@ -163,7 +166,7 @@ def _jose(e, backend):
         return _no("not a compact JWS (need 3 dot-separated parts)")
     h, p, s = parts
     try:
-        header = json.loads(base64.urlsafe_b64decode(h + "=" * (-len(h) % 4)).decode("utf-8"))
+        header = strict_json_loads(base64.urlsafe_b64decode(h + "=" * (-len(h) % 4)).decode("utf-8"))
         if not isinstance(header, dict):
             raise ValueError
     except Exception:

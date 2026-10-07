@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=69,<81", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -25,10 +25,10 @@ classifiers = [
   "Topic :: Security :: Cryptography",
   "Typing :: Typed",
 ]
-dependencies = ["dilithium-py>=1.4,<2"]
+dependencies = ["dilithium-py>=1.4,<1.5"]  # tested minor only; the backend self-test (mldsa._self_test) guards the rest
 
 [project.optional-dependencies]
-fast = ["pqcrypto>=1.0,<2"]
+fast = ["pqcrypto>=1.0,<1.1"]  # tested minor only (1.0.0 API: verify() returns None / raises)
 test = ["pytest>=7"]
 
 [project.scripts]
@@ -43,7 +43,7 @@ Source = "https://github.com/johnInarti/pqc-receipts-colosseum/tree/main/python"
 where = ["src"]
 
 [tool.setuptools.package-data]
-fractalai_pqc_verify = ["vectors/*.json", "py.typed"]
+fractalai_pqc_verify = ["vectors/*.json", "py.typed", "kernel/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

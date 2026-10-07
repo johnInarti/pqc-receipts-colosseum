@@ -65,7 +65,7 @@
         "devnet": [
           "7cpTE4C7sRWsHyeGsiqTfwNv9ntyribrRJV3s8vmN624"
         ],
-        "mainnet-beta": [],
+        "mainnet-beta": ["7cpTE4C7sRWsHyeGsiqTfwNv9ntyribrRJV3s8vmN624"],
         "testnet": []
       }
     }

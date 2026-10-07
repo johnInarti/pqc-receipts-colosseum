@@ -21,9 +21,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   ANCHOR_SCHEME, MEMO_PROGRAM_ID, DEFAULT_RPC, explorerTx, keypairFromSolanaJson, sealFromReceipt,
-  deriveAnchorIds, buildMemo, verifyReceiptSignature, buildMemoMessage, signTransaction, rpc, verifySolanaAnchor,
+  deriveAnchorIds, buildMemo, buildMemoMessage, signTransaction, verifySolanaAnchor,
 } from '../verifier/src/solana-anchor.mjs';
-import { trustedKeysFromDirectory } from '../verifier/src/verify-anchor.mjs';
+import { verify } from '../kernel/src/index.mjs';
+import { rpcCall } from '../kernel/src/rpc.mjs';
+
+// Emitter-side JSON-RPC: the kernel's bounded client (hard deadline over headers + body, size cap).
+const rpc = (url, method, params) => rpcCall(url, method, params, { timeoutMs: 20_000 });
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -52,14 +56,13 @@ const getJson = async (u) => { const r = await fetch(u, { signal: AbortSignal.ti
 const receipt = await getJson(`${BASE}/api/midas/alerts/receipt/${RECEIPT_ID}`);
 const seal = sealFromReceipt(receipt);
 if (seal.content_id !== RECEIPT_ID) die('receipt endpoint returned a different receipt id');
-const dir = await getJson(`${BASE}/.well-known/x402-receipt-keys`);
-const trusted = trustedKeysFromDirectory(dir);
-const sv = verifyReceiptSignature(seal, trusted);
-if (!sv.ok) die(`receipt does not verify (${sv.reason}) — refusing to anchor`);
+// Anchor ONLY what the Trust Kernel itself accepts under the pinned roots (never a TLS-only or overridden verdict).
+const dirText = await (async () => { const r = await fetch(`${BASE}/.well-known/x402-receipt-keys`, { signal: AbortSignal.timeout(20000) }); if (!r.ok) throw new Error(`key directory HTTP ${r.status}`); return r.text(); })();
+const pre = await verify(JSON.stringify(receipt), { kind: 'midas-alert', directory: dirText });
+if (!pre.valid || pre.trust_basis !== 'pinned-root') die(`Trust Kernel refuses this receipt (${pre.trust_basis}): ${pre.reasons.map((r) => r.code).join(', ')} — refusing to anchor`);
 const ids = deriveAnchorIds(seal);
 const memo = buildMemo(ids);
-const entry = (dir.keys || []).find((k) => k.public_key_b64 === seal.public_key);
-console.log(`receipt   ${RECEIPT_ID}  ML-DSA-65 OK, key ${entry?.kid} (${entry?.status}) in directory epoch ${dir.epoch}`);
+console.log(`receipt   ${RECEIPT_ID}  Trust Kernel VALID (pinned-root), key ${pre.key?.kid} (${pre.key?.status ?? 'listed'}) in directory epoch ${pre.directory?.epoch}`);
 console.log(`memo      ${memo}  (${Buffer.byteLength(memo)} bytes)`);
 
 const rid8 = RECEIPT_ID.slice(0, 8);
@@ -124,8 +127,9 @@ console.log(`finalized slot ${status.slot}`);
 
 // 6) Verify back from the RPC exactly as a third party would, then write the record.
 let v;
-for (let i = 0; i < 10; i++) { v = await verifySolanaAnchor({ signature, receipt, expectedSigner: kp.pubkey, cluster, rpcUrl, trustedPublicKeysB64: trusted }); if (v.valid || v.tx_found) break; await sleep(3000); }
+for (let i = 0; i < 10; i++) { v = await verifySolanaAnchor({ signature, receipt, expectedSigner: kp.pubkey, cluster, rpcUrl, keyDirectory: dirText }); if (v.valid || v.tx_found) break; await sleep(3000); }
 if (!v.valid) die(`anchored but self-verification failed: ${v.reason}`);
+if (cluster === 'mainnet-beta' && !(v.verdict?.levels?.time_anchored && v.tx_finalized)) die(`anchored but the kernel does not report a finalized production time anchor: ${v.reason}`);
 const record = {
   source_receipt_url: `${BASE}/api/midas/alerts/receipt/${RECEIPT_ID}`,
   key_directory: `${BASE}/.well-known/x402-receipt-keys`,

@@ -1,0 +1,116 @@
+{
+ "id": "N-RTS1c-memo-forged-obs",
+ "title": "Memo encoding trick: forged-obs",
+ "source": [
+  "redteam-anchor:RT-S1c",
+  "redteam-anchor:RT-S5"
+ ],
+ "input": {
+  "receipt": {
+   "$ref": "fixtures/midas-fe62b072.json"
+  }
+ },
+ "context": {
+  "now": 1791400000,
+  "options": {
+   "kind": "midas-alert",
+   "check_anchors": true,
+   "anchors": [
+    {
+     "chain": "solana",
+     "cluster": "devnet",
+     "signature": "5QXAxz5RvNABnA4CsYA2LEWAnr8gHRmVv4ZtjpistMYjGA19tKMzwMJq8bJtmj1du4zAqBiM3pQpQvur1zyxJ2RP"
+    }
+   ],
+   "rpc": {
+    "solana:devnet": [
+     "replay://sol-synthetic"
+    ]
+   },
+   "solana_signers": [
+    "7GhDkJH5j344iNvM8Nvybix5e88q98uQfxgMvB2WYPc9"
+   ],
+   "policy": {
+    "require": [
+     "integrity",
+     "authentic",
+     "trusted",
+     "time_anchored"
+    ],
+    "allow_testnet_anchors": true
+   }
+  },
+  "directory": {
+   "$ref": "fixtures/directory-epoch3.json"
+  },
+  "rpc_transcript": [
+   {
+    "url": "replay://sol-synthetic",
+    "method": "getGenesisHash",
+    "params": [],
+    "result": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
+   },
+   {
+    "url": "replay://sol-synthetic",
+    "method": "getTransaction",
+    "params": [
+     "5QXAxz5RvNABnA4CsYA2LEWAnr8gHRmVv4ZtjpistMYjGA19tKMzwMJq8bJtmj1du4zAqBiM3pQpQvur1zyxJ2RP",
+     {
+      "encoding": "base64",
+      "commitment": "finalized",
+      "maxSupportedTransactionVersion": 0
+     }
+    ],
+    "result": {
+     "slot": 4242,
+     "blockTime": 1791342896,
+     "meta": {
+      "err": null
+     },
+     "transaction": [
+      "AdxZ1i6EUyEFU7sc0lbsWvSgDCpzhx43IRr4A13njgeNNxYnweF0I6kcVDvF++HfdBUmtNRr8C4C411kSqVzUgIBAAECXStPcc8fmXsgfpM2r4z8o5CPOk0eprcpxUBvKWbJFVYFSlNamSkhBk0k6HFg2jh8fDW13bySu4HkH6hAQQVEjUbNeOl5d9HVhQEcRBWdbL4NsDx8Ld6qIsixsewm29mWAQEBAMsBZnJhY3RhbGFpLnBxYy1yZWNlaXB0LWFuY2hvci8xfHJpZD1iOWI0N2JhODFkMzBkOTVhMDg3YWM0MGI0ZDdjMWMwNzgxNjE0ODI1MWMxNDcxMjFlN2M0YWFjNDc3Y2Q5NGVifHBoPWVmNzM3ZjFjYThkOTlmYWJmNThhODEzNzMxODhjYzM0OTE4M2JmYzg5NzZjMWFlM2QzODYxMjM4YjQ5OGUwNjV8a2lkPTg2YzEzOWM5NjBiYjI3NGN8b2JzPTE3MDAwMDAwMDA=",
+      "base64"
+     ]
+    }
+   },
+   {
+    "url": "replay://sol-synthetic",
+    "method": "getSignatureStatuses",
+    "params": [
+     [
+      "5QXAxz5RvNABnA4CsYA2LEWAnr8gHRmVv4ZtjpistMYjGA19tKMzwMJq8bJtmj1du4zAqBiM3pQpQvur1zyxJ2RP"
+     ],
+     {
+      "searchTransactionHistory": true
+     }
+    ],
+    "result": {
+     "context": {
+      "slot": 4252
+     },
+     "value": [
+      {
+       "slot": 4242,
+       "confirmations": null,
+       "err": null,
+       "confirmationStatus": "finalized"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "expect": {
+  "valid": false,
+  "levels": {
+   "integrity": true,
+   "authentic": true,
+   "trusted": true,
+   "time_anchored": false,
+   "finalized": false
+  },
+  "codes": [
+   "SOL_MEMO_MISMATCH"
+  ]
+ }
+}

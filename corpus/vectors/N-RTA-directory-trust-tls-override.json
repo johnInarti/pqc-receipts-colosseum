@@ -1,0 +1,31 @@
+{
+ "id": "N-RTA-directory-trust-tls-override",
+ "title": "allowTlsDirectory override: same real directory, but trust_basis must say \"tls\" (not pinned)",
+ "source": [],
+ "input": {
+  "receipt": {
+   "$ref": "fixtures/midas-fe62b072.json"
+  }
+ },
+ "context": {
+  "now": 1791400000,
+  "options": {
+   "kind": "midas-alert",
+   "allow_tls_directory": true
+  },
+  "directory": {
+   "$ref": "fixtures/directory-epoch3.json"
+  }
+ },
+ "expect": {
+  "valid": true,
+  "levels": {
+   "integrity": true,
+   "authentic": true,
+   "trusted": true,
+   "time_anchored": null,
+   "finalized": null
+  },
+  "trust_basis": "tls"
+ }
+}

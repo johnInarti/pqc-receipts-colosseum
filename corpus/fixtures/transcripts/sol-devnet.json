@@ -1,0 +1,99 @@
+{
+ "recorded_at": "2026-10-07T05:06:37.509Z",
+ "ref": {
+  "chain": "solana",
+  "cluster": "devnet",
+  "signature": "5U5CQn94ix6Unbjk5ixKoRfyqmQ8HiPttwyssmUdoGdyCQzupnvNgKL3znnqN46UWLoWuhYHqaiFyynro6pP3qXi"
+ },
+ "transcript": [
+  {
+   "url": "replay://sol-devnet",
+   "method": "getGenesisHash",
+   "params": [],
+   "result": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
+  },
+  {
+   "url": "replay://sol-devnet",
+   "method": "getTransaction",
+   "params": [
+    "5U5CQn94ix6Unbjk5ixKoRfyqmQ8HiPttwyssmUdoGdyCQzupnvNgKL3znnqN46UWLoWuhYHqaiFyynro6pP3qXi",
+    {
+     "encoding": "base64",
+     "commitment": "finalized",
+     "maxSupportedTransactionVersion": 0
+    }
+   ],
+   "result": {
+    "blockTime": 1791342896,
+    "meta": {
+     "computeUnitsConsumed": 86507,
+     "costUnits": 87601,
+     "err": null,
+     "fee": 5000,
+     "innerInstructions": [],
+     "loadedAddresses": {
+      "readonly": [],
+      "writable": []
+     },
+     "logMessages": [
+      "Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr invoke [1]",
+      "Program log: Signed by 7cpTE4C7sRWsHyeGsiqTfwNv9ntyribrRJV3s8vmN624",
+      "Program log: Memo (len 203): \"fractalai.pqc-receipt-anchor/1|rid=b9b47ba81d30d95a087ac40b4d7c1c07816148251c147121e7c4aac477cd94eb|ph=ef737f1ca8d99fabf58a81373188cc349183bfc8976c1ae3d3861238b498e065|kid=86c139c960bb274c|obs=1790473960\"",
+      "Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr consumed 86507 of 200000 compute units",
+      "Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr success"
+     ],
+     "postBalances": [
+      1245000,
+      41509609334
+     ],
+     "postTokenBalances": [],
+     "preBalances": [
+      1250000,
+      41509609334
+     ],
+     "preTokenBalances": [],
+     "rewards": [],
+     "status": {
+      "Ok": null
+     }
+    },
+    "slot": 508315461,
+    "transaction": [
+     "Ad9qBtZ6UEXnKqvsHm0byu9Mumszc1TJKOe8aMcb4nWbSoApxA65hV15ydLscf6edSCJ0GGH90XJaEfTZ1wMLwUBAAECYlMarN+RJC26Yb2ayhQ038+dA8t2H6+o8+SSpbq9RtkFSlNamSkhBk0k6HFg2jh8fDW13bySu4HkH6hAQQVEjaHN3nvW923HlFjx3AGJz+w2teVa7HtidCrenS3CMf7HAQEBAMsBZnJhY3RhbGFpLnBxYy1yZWNlaXB0LWFuY2hvci8xfHJpZD1iOWI0N2JhODFkMzBkOTVhMDg3YWM0MGI0ZDdjMWMwNzgxNjE0ODI1MWMxNDcxMjFlN2M0YWFjNDc3Y2Q5NGVifHBoPWVmNzM3ZjFjYThkOTlmYWJmNThhODEzNzMxODhjYzM0OTE4M2JmYzg5NzZjMWFlM2QzODYxMjM4YjQ5OGUwNjV8a2lkPTg2YzEzOWM5NjBiYjI3NGN8b2JzPTE3OTA0NzM5NjA=",
+     "base64"
+    ],
+    "transactionIndex": 11,
+    "version": "legacy"
+   }
+  },
+  {
+   "url": "replay://sol-devnet",
+   "method": "getSignatureStatuses",
+   "params": [
+    [
+     "5U5CQn94ix6Unbjk5ixKoRfyqmQ8HiPttwyssmUdoGdyCQzupnvNgKL3znnqN46UWLoWuhYHqaiFyynro6pP3qXi"
+    ],
+    {
+     "searchTransactionHistory": true
+    }
+   ],
+   "result": {
+    "context": {
+     "apiVersion": "4.4.0-beta.0",
+     "slot": 508343503
+    },
+    "value": [
+     {
+      "confirmationStatus": "finalized",
+      "confirmations": null,
+      "err": null,
+      "slot": 508315461,
+      "status": {
+       "Ok": null
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

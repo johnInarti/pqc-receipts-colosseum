@@ -1,0 +1,35 @@
+{
+ "id": "N-kind-policy-seal-gets-midas",
+ "title": "Policy expects x402 seals only; a MIDAS alert is refused",
+ "source": [],
+ "input": {
+  "receipt": {
+   "$ref": "fixtures/midas-fe62b072.json"
+  }
+ },
+ "context": {
+  "now": 1791400000,
+  "options": {
+   "kinds": [
+    "x402-seal",
+    "self-attest-seal"
+   ]
+  },
+  "directory": {
+   "$ref": "fixtures/directory-epoch3.json"
+  }
+ },
+ "expect": {
+  "valid": false,
+  "levels": {
+   "integrity": false,
+   "authentic": false,
+   "trusted": false,
+   "time_anchored": null,
+   "finalized": null
+  },
+  "codes": [
+   "KIND_NOT_ALLOWED"
+  ]
+ }
+}

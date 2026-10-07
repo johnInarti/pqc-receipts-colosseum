@@ -1,0 +1,59 @@
+{
+ "id": "N-confirmations",
+ "title": "Fewer confirmations than policy",
+ "source": [],
+ "input": {
+  "receipt": {
+   "$ref": "fixtures/midas-fe62b072.json"
+  }
+ },
+ "context": {
+  "now": 1791400000,
+  "options": {
+   "kind": "midas-alert",
+   "check_anchors": true,
+   "anchors": [
+    {
+     "chain_id": 5042,
+     "tx_hash": "0x31979b7fa0a6605ea4ac9380051c92ad6b6e222fc39ada10ea46e655eab86b64",
+     "log_index": 5
+    }
+   ],
+   "rpc": {
+    "eip155:5042": [
+     "replay://arc"
+    ]
+   },
+   "policy": {
+    "require": [
+     "integrity",
+     "authentic",
+     "trusted",
+     "time_anchored"
+    ],
+    "min_confirmations": 1000000000
+   }
+  },
+  "directory": {
+   "$ref": "fixtures/directory-epoch3.json"
+  },
+  "rpc_transcript": [
+   {
+    "$ref": "fixtures/transcripts/arc-tx.json#transcript"
+   }
+  ]
+ },
+ "expect": {
+  "valid": false,
+  "levels": {
+   "integrity": true,
+   "authentic": true,
+   "trusted": true,
+   "time_anchored": false,
+   "finalized": false
+  },
+  "codes": [
+   "ANCHOR_CONFIRMATIONS"
+  ]
+ }
+}

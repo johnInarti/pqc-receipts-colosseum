@@ -1,0 +1,51 @@
+{
+ "id": "N-RTE2c-chain-not-pinned",
+ "title": "Anchor on a chain with no pinned deployment (local/test chain)",
+ "source": [
+  "redteam-anchor:RT-E2"
+ ],
+ "input": {
+  "receipt": {
+   "$ref": "fixtures/midas-fe62b072.json"
+  }
+ },
+ "context": {
+  "now": 1791400000,
+  "options": {
+   "kind": "midas-alert",
+   "check_anchors": true,
+   "anchors": [
+    {
+     "chain_id": 31337,
+     "contract": "0x1111111111111111111111111111111111111111"
+    }
+   ],
+   "rpc": {},
+   "policy": {
+    "require": [
+     "integrity",
+     "authentic",
+     "trusted",
+     "time_anchored"
+    ]
+   }
+  },
+  "directory": {
+   "$ref": "fixtures/directory-epoch3.json"
+  },
+  "rpc_transcript": []
+ },
+ "expect": {
+  "valid": false,
+  "levels": {
+   "integrity": true,
+   "authentic": true,
+   "trusted": true,
+   "time_anchored": false,
+   "finalized": false
+  },
+  "codes": [
+   "ANCHOR_CHAIN_NOT_PINNED"
+  ]
+ }
+}

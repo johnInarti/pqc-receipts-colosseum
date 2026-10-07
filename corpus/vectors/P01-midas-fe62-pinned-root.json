@@ -1,0 +1,32 @@
+{
+ "id": "P01-midas-fe62-pinned-root",
+ "title": "Real MIDAS alert fe62b072 + real epoch-3 directory, verified against the BAKED roots",
+ "source": [],
+ "input": {
+  "receipt": {
+   "$ref": "fixtures/midas-fe62b072.json"
+  }
+ },
+ "context": {
+  "now": 1791400000,
+  "options": {
+   "kind": "midas-alert",
+   "expected_id": "fe62b072c2740e7a8d10cf7e643905b7d79f3f9b19f1c3970fc8754f18d538ee"
+  },
+  "directory": {
+   "$ref": "fixtures/directory-epoch3.json"
+  }
+ },
+ "expect": {
+  "valid": true,
+  "levels": {
+   "integrity": true,
+   "authentic": true,
+   "trusted": true,
+   "time_anchored": null,
+   "finalized": null
+  },
+  "trust_basis": "pinned-root",
+  "exit_code": 0
+ }
+}

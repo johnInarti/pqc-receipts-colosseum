@@ -1,0 +1,61 @@
+{
+ "id": "N-PYF11-directory-keys-null",
+ "title": "directory keys = null",
+ "source": [
+  "redteam-python:F11"
+ ],
+ "input": {
+  "receipt": {
+   "$ref": "fixtures/midas-fe62b072.json"
+  }
+ },
+ "context": {
+  "now": 1791400000,
+  "options": {
+   "kind": "midas-alert"
+  },
+  "directory": {
+   "spec": "FRACTALAI-key-directory-v1",
+   "issuer": "FractalAI",
+   "epoch": 3,
+   "prev_root": "16e916f4351d266c56e29532817fba38207309c2facbb760dfa5f88f8236122a",
+   "root": "8748d4d6966857adbab6e9f555cc8323f7726c0681b31e9f64df8d989ca088d7",
+   "keys": null,
+   "overlap_until": 1798246800,
+   "latest_epoch": 3,
+   "previous_epochs": [
+    {
+     "epoch": 1,
+     "root": "a97d9bdb5128817a08ec6449c5a9627bf7c09a932a76a6338e3a0c9d223b8a5a"
+    },
+    {
+     "epoch": 2,
+     "root": "16e916f4351d266c56e29532817fba38207309c2facbb760dfa5f88f8236122a"
+    }
+   ],
+   "lifecycle": "keys[] is append-only across epochs. A key with status \"retiring\" still verifies receipts signed until `not_after` (= overlap_until); \"revoked\" keys stay listed so old receipts remain checkable with an explicit \"signed before revocation\" story. New receipts are signed only by the single \"active\" key.",
+   "verify": "verifyDirectory (@fractalai/pqc-agent-receipts-conformance/key-directory): check the ML-DSA-65 governance signature over `FRACTALAI-key-directory-v1\\n<root>`, that root recomputes over keys, that prev_root equals the previous epoch's root, and — once anchored — that root equals the on-chain value. Then pin these public_key_b64 as trustedKeys when verifying a receipt.",
+   "signed_message": "FRACTALAI-key-directory-v1\n8748d4d6966857adbab6e9f555cc8323f7726c0681b31e9f64df8d989ca088d7",
+   "signature": "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",
+   "directory_public_key": "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",
+   "anchor": {
+    "status": "tls-only",
+    "onchain": "pending",
+    "note": "The directory is ML-DSA-65-signed (tamper/equivocation-evident given the governance key). Its `root` is committed on-chain once the FractalCheckpoint anchor on Base is live; this field will then carry {chain:\"base\", tx:\"0x…\", epoch}. Until then, do NOT claim trustless-of-TLS trust."
+   }
+  }
+ },
+ "expect": {
+  "valid": false,
+  "levels": {
+   "integrity": true,
+   "authentic": true,
+   "trusted": false,
+   "time_anchored": null,
+   "finalized": null
+  },
+  "codes": [
+   "DIRECTORY_INVALID"
+  ]
+ }
+}

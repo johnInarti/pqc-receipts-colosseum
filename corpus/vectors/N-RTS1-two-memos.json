@@ -1,0 +1,115 @@
+{
+ "id": "N-RTS1-two-memos",
+ "title": "Two memo instructions",
+ "source": [
+  "redteam-anchor:RT-S1"
+ ],
+ "input": {
+  "receipt": {
+   "$ref": "fixtures/midas-fe62b072.json"
+  }
+ },
+ "context": {
+  "now": 1791400000,
+  "options": {
+   "kind": "midas-alert",
+   "check_anchors": true,
+   "anchors": [
+    {
+     "chain": "solana",
+     "cluster": "devnet",
+     "signature": "5T1L4b5Zu2kcmHosTJ9Dd4maqCj8oVd9mRRGCQEZiUMCwowvC2mdCgKmnJv9qcNkeybmDJRTQ5XXMXggZ7TNmMAy"
+    }
+   ],
+   "rpc": {
+    "solana:devnet": [
+     "replay://sol-synthetic"
+    ]
+   },
+   "solana_signers": [
+    "7GhDkJH5j344iNvM8Nvybix5e88q98uQfxgMvB2WYPc9"
+   ],
+   "policy": {
+    "require": [
+     "integrity",
+     "authentic",
+     "trusted",
+     "time_anchored"
+    ],
+    "allow_testnet_anchors": true
+   }
+  },
+  "directory": {
+   "$ref": "fixtures/directory-epoch3.json"
+  },
+  "rpc_transcript": [
+   {
+    "url": "replay://sol-synthetic",
+    "method": "getGenesisHash",
+    "params": [],
+    "result": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
+   },
+   {
+    "url": "replay://sol-synthetic",
+    "method": "getTransaction",
+    "params": [
+     "5T1L4b5Zu2kcmHosTJ9Dd4maqCj8oVd9mRRGCQEZiUMCwowvC2mdCgKmnJv9qcNkeybmDJRTQ5XXMXggZ7TNmMAy",
+     {
+      "encoding": "base64",
+      "commitment": "finalized",
+      "maxSupportedTransactionVersion": 0
+     }
+    ],
+    "result": {
+     "slot": 4242,
+     "blockTime": 1791342896,
+     "meta": {
+      "err": null
+     },
+     "transaction": [
+      "Ad5+if5UiQS838wW1kppXKPzX1wlBor+PWvSYDvWeS5PEe3MyIhlgWBDH5TqGKz1Kkqn2GEX+VNKFF+G1WLCdwIBAAECXStPcc8fmXsgfpM2r4z8o5CPOk0eprcpxUBvKWbJFVYFSlNamSkhBk0k6HFg2jh8fDW13bySu4HkH6hAQQVEjUbNeOl5d9HVhQEcRBWdbL4NsDx8Ld6qIsixsewm29mWAgEBAMsBZnJhY3RhbGFpLnBxYy1yZWNlaXB0LWFuY2hvci8xfHJpZD1iOWI0N2JhODFkMzBkOTVhMDg3YWM0MGI0ZDdjMWMwNzgxNjE0ODI1MWMxNDcxMjFlN2M0YWFjNDc3Y2Q5NGVifHBoPWVmNzM3ZjFjYThkOTlmYWJmNThhODEzNzMxODhjYzM0OTE4M2JmYzg5NzZjMWFlM2QzODYxMjM4YjQ5OGUwNjV8a2lkPTg2YzEzOWM5NjBiYjI3NGN8b2JzPTE3OTA0NzM5NjABAQDMAWZyYWN0YWxhaS5wcWMtcmVjZWlwdC1hbmNob3IvMXxyaWQ9YjliNDdiYTgxZDMwZDk1YTA4N2FjNDBiNGQ3YzFjMDc4MTYxNDgyNTFjMTQ3MTIxZTdjNGFhYzQ3N2NkOTRlYnxwaD1lZjczN2YxY2E4ZDk5ZmFiZjU4YTgxMzczMTg4Y2MzNDkxODNiZmM4OTc2YzFhZTNkMzg2MTIzOGI0OThlMDY1fGtpZD04NmMxMzljOTYwYmIyNzRjfG9icz05MTc5MDQ3Mzk2MA==",
+      "base64"
+     ]
+    }
+   },
+   {
+    "url": "replay://sol-synthetic",
+    "method": "getSignatureStatuses",
+    "params": [
+     [
+      "5T1L4b5Zu2kcmHosTJ9Dd4maqCj8oVd9mRRGCQEZiUMCwowvC2mdCgKmnJv9qcNkeybmDJRTQ5XXMXggZ7TNmMAy"
+     ],
+     {
+      "searchTransactionHistory": true
+     }
+    ],
+    "result": {
+     "context": {
+      "slot": 4252
+     },
+     "value": [
+      {
+       "slot": 4242,
+       "confirmations": null,
+       "err": null,
+       "confirmationStatus": "finalized"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "expect": {
+  "valid": false,
+  "levels": {
+   "integrity": true,
+   "authentic": true,
+   "trusted": true,
+   "time_anchored": false,
+   "finalized": false
+  },
+  "codes": [
+   "SOL_INSTRUCTION_COUNT"
+  ]
+ }
+}

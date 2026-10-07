@@ -1,0 +1,11 @@
+{
+  "name": "@fractalai/pqc-trust-corpus",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Adversarial + positive golden corpus for Trust Kernel v2 (executable specification). Every implementation must pass corpus/run at 100%.",
+  "type": "module",
+  "scripts": { "gen": "node gen.mjs", "test": "node run.mjs", "record-live": "node record-live.mjs" },
+  "engines": { "node": ">=20" },
+  "license": "Apache-2.0",
+  "devDependencies": { "@noble/curves": "~2.2.0", "@noble/post-quantum": "~0.6.1" }
+}

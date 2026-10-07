@@ -1,0 +1,47 @@
+{
+ "id": "P04-arbitrum-tx-ref",
+ "title": "Arbitrum One anchor located by tx hash + log index",
+ "source": [],
+ "input": {
+  "receipt": {
+   "$ref": "fixtures/midas-fe62b072.json"
+  }
+ },
+ "context": {
+  "now": 1791400000,
+  "options": {
+   "kind": "midas-alert",
+   "check_anchors": true,
+   "anchors": [
+    {
+     "chain_id": 42161,
+     "tx_hash": "0x37f0254389deed3953aa44333e32eaeb466f28ff41ac9299eb5285599a7a1174",
+     "log_index": 5
+    }
+   ],
+   "rpc": {
+    "eip155:42161": [
+     "replay://arb1"
+    ]
+   }
+  },
+  "directory": {
+   "$ref": "fixtures/directory-epoch3.json"
+  },
+  "rpc_transcript": [
+   {
+    "$ref": "fixtures/transcripts/arb1-tx.json#transcript"
+   }
+  ]
+ },
+ "expect": {
+  "valid": true,
+  "levels": {
+   "integrity": true,
+   "authentic": true,
+   "trusted": true,
+   "time_anchored": true,
+   "finalized": true
+  }
+ }
+}

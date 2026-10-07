@@ -1,0 +1,32 @@
+{
+ "id": "N-kind-not-declared",
+ "title": "Caller policy names no kind — the document never chooses",
+ "source": [
+  "redteam-python:F1"
+ ],
+ "input": {
+  "receipt": {
+   "$ref": "fixtures/midas-fe62b072.json"
+  }
+ },
+ "context": {
+  "now": 1791400000,
+  "options": {},
+  "directory": {
+   "$ref": "fixtures/directory-epoch3.json"
+  }
+ },
+ "expect": {
+  "valid": false,
+  "levels": {
+   "integrity": false,
+   "authentic": false,
+   "trusted": false,
+   "time_anchored": null,
+   "finalized": null
+  },
+  "codes": [
+   "KIND_UNKNOWN"
+  ]
+ }
+}

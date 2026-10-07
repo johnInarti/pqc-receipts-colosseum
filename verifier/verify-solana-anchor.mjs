@@ -1,41 +1,40 @@
 #!/usr/bin/env node
-// Verify a FractalAI receipt anchored on Solana via the SPL Memo program — from any public Solana RPC,
-// with the ML-DSA-65 receipt signature checked locally. FAIL-CLOSED: exit 0 only on VALID.
+// Verify a FractalAI receipt anchored on Solana via the SPL Memo program — decided by Trust Kernel v2
+// (pinned genesis hash, finalized + blockTime required, local Ed25519, announced signer, exactly one Memo v2
+// instruction, memo rebuilt byte-for-byte from the SIGNED receipt). Devnet/testnet are marked "test".
 //
 // usage:
 //   node verify-solana-anchor.mjs --record ../deployments/anchors/solana-devnet-fe62b072.json
-//   node verify-solana-anchor.mjs --sig <base58 tx sig> --signer <announced pubkey> \
-//        [--receipt fe62b072…|receipt.json] [--cluster devnet|mainnet-beta] [--rpc URL]
-//        [--keys-url URL] [--no-key-pin]
-//
-// --record takes sig/signer/cluster from an anchor record (deployments/anchors/solana-*.json) and the
-// receipt from that record's embedded seal; any explicit flag overrides it.
-import { readFileSync, existsSync } from 'node:fs';
+//   node verify-solana-anchor.mjs --sig <base58 tx sig> [--receipt receipt.json] [--cluster devnet|mainnet-beta]
+//        [--rpc URL] [--cross-rpc URL]… [--signer PUBKEY (override)] [--keys-url URL] [--trusted-key B64]…
+// exit: 0 valid · 10–13 first failed level · 2 usage · 3 input
+import { readFileSync } from 'node:fs';
+import { boundedFetch, parseJsonStrict, oneLine, safeJson, EXIT } from '@fractalai/pqc-trust-kernel';
 import { verifySolanaAnchor } from './src/solana-anchor.mjs';
-import { fetchTrustedKeys, DEFAULT_KEYS_URL } from './src/verify-anchor.mjs';
 
 const args = process.argv.slice(2);
-const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
-const base = process.env.FRACTALAI_BASE || 'https://fractalai.net.co';
+const opt = (n) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
+const many = (n) => args.flatMap((a, i) => (a === n ? [args[i + 1]] : []));
+const DEFAULT_KEYS = 'https://fractalai.net.co/.well-known/x402-receipt-keys';
+const read = (p) => parseJsonStrict(readFileSync(p, 'utf8'));
 
-const record = opt('--record') ? JSON.parse(readFileSync(opt('--record'), 'utf8')) : null;
-const signature = opt('--sig') ?? record?.anchor?.signature;
-const expectedSigner = opt('--signer') ?? record?.anchor?.signer;
-const cluster = opt('--cluster') ?? record?.anchor?.cluster ?? 'devnet';
-if (!signature || !expectedSigner) {
-  console.error('usage: node verify-solana-anchor.mjs (--record file.json | --sig SIG --signer PUBKEY) [--receipt ID|file.json] [--cluster devnet|mainnet-beta] [--rpc URL] [--keys-url URL] [--no-key-pin]');
-  process.exit(2);
+try {
+  const record = opt('--record') ? read(opt('--record')) : null;
+  const signature = opt('--sig') ?? record?.anchor?.signature;
+  const cluster = opt('--cluster') ?? record?.anchor?.cluster ?? 'devnet';
+  const receipt = opt('--receipt') ? read(opt('--receipt')) : record?.seal;
+  if (!signature || !receipt) { console.error('usage: node verify-solana-anchor.mjs (--record file.json | --sig SIG --receipt receipt.json) [--cluster C] [--rpc URL]'); process.exit(EXIT.USAGE); }
+  const trusted = many('--trusted-key');
+  const keyDirectory = trusted.length ? undefined : await boundedFetch(opt('--keys-url') ?? DEFAULT_KEYS);
+  const r = await verifySolanaAnchor({
+    signature, receipt, cluster, rpcUrl: opt('--rpc'), crossCheckRpcUrls: many('--cross-rpc'), expectedSigner: opt('--signer'),
+    keyDirectory, trustedPublicKeysB64: trusted.length ? trusted : undefined,
+  });
+  const { verdict, ...flat } = r;
+  console.log(safeJson(flat));
+  console.log(r.valid ? `VALID — ${oneLine(r.reason)}` : `INVALID — ${oneLine(r.reason, 400)}`);
+  process.exit(r.valid ? EXIT.VALID : verdict.exit_code || EXIT.time_anchored);
+} catch (e) {
+  console.error(`error: ${oneLine(e.detail ?? e.message)}`);
+  process.exit(EXIT.INPUT);
 }
-
-let receipt;
-const rArg = opt('--receipt');
-if (rArg && existsSync(rArg)) receipt = JSON.parse(readFileSync(rArg, 'utf8'));
-else if (rArg) receipt = await (await fetch(`${base}/api/midas/alerts/receipt/${rArg}`, { signal: AbortSignal.timeout(20000) })).json();
-else if (record?.seal) receipt = record.seal;
-else receipt = await (await fetch(`${base}/api/midas/alerts/receipt/fe62b072c2740e7a8d10cf7e643905b7d79f3f9b19f1c3970fc8754f18d538ee`, { signal: AbortSignal.timeout(20000) })).json();
-
-const trusted = args.includes('--no-key-pin') ? undefined : await fetchTrustedKeys(opt('--keys-url') ?? DEFAULT_KEYS_URL);
-const result = await verifySolanaAnchor({ signature, receipt, expectedSigner, cluster, rpcUrl: opt('--rpc'), trustedPublicKeysB64: trusted });
-console.log(JSON.stringify(result, null, 2));
-console.log(result.valid ? `VALID — ${result.reason}` : `INVALID — ${result.reason}`);
-process.exit(result.valid ? 0 : 1);

@@ -1,205 +1,136 @@
+#!/usr/bin/env node
 /**
- * verify-anchor.mjs — OFFLINE + ANY-RPC verification of an Arbitrum-anchored, ML-DSA-65-signed x402 seal.
- * Nothing here talks to FractalAI: the signature is checked locally with @noble/post-quantum against
- * public keys you pin (or fetch once from the public key directory), and the anchor is checked against
- * any Arbitrum JSON-RPC endpoint of YOUR choosing.
+ * verify-anchor.mjs — compatibility layer over Trust Kernel v2 for anchored seals / MIDAS receipts.
+ * The kernel decides everything: the anchor contract is PINNED by chain id (address + runtime code hash in
+ * kernel/trust-roots.json), time comes from the block header, observedAt must equal the SIGNED time, keys are
+ * trusted only through the pinned directory roots (or an explicit pinned key set = override).
  *
- * On-chain record (PQCReceiptAnchor.ReceiptAnchored, write-once per receiptId):
- *   receiptId   = sha256(ML-DSA-65 signature bytes)
- *   payloadHash = sha256(utf8(`${seal.domain}\n${seal.content_id}`))  — the exact bytes the signature covers
- *   kid         = sha256(public_key_b64)[:16] (8 bytes) left-aligned in bytes32
- *
- * Verdict is FAIL-CLOSED: `valid` is true only when the signature verifies over the recomputed content_id,
- * the key is in the trust list (when one is given), the chain id matches, and the on-chain event for the
- * recomputed receiptId carries the same payloadHash and kid. Every negative path returns a `reason`.
- *
- * CLI:  node src/verify-anchor.mjs <seal.json> [--rpc https://sepolia-rollup.arbitrum.io/rpc]
- *         [--contract 0x…] [--keys-url https://fractalai.net.co/.well-known/x402-receipt-keys] [--no-key-pin]
+ * CLI:  x402-verify-anchor <seal.json> [--rpc URL]… [--cross-rpc URL]… [--finalized] [--keys-url URL]
+ *         [--trusted-key B64]… [--allow-testnet] [--known-anchorer] [--anchored-by 0x…]
+ * Exit code = first failed level (0 valid · 10 integrity · 11 authentic · 12 trusted · 13 time_anchored · 14 finalized).
  */
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { verifySeal } from './witness-core.mjs';
+import {
+  verify, verifyDirectoryChain, keyAuthorizes, parseJsonStrict, boundedFetch, oneLine, safeJson, sha256hex,
+  BAKED_ROOTS, RECEIPT_ANCHORED_TOPIC, ANCHOR_SCHEME, EXIT, KINDS,
+} from '@fractalai/pqc-trust-kernel';
 
-export const ANCHOR_SCHEME = 'fractalai.pqc-receipt-anchor/1';
-/** keccak256("ReceiptAnchored(bytes32,bytes32,bytes32,uint64,address,uint256)") */
-export const RECEIPT_ANCHORED_TOPIC = '0x86069938b925599e2755e87e9b3242e8f6cbd24f2bc3d1ab52bc585d82646184';
-export const DEFAULT_RPC_BY_CHAIN = {
-  421614: 'https://sepolia-rollup.arbitrum.io/rpc',
-  42161: 'https://arb1.arbitrum.io/rpc',
-};
+export { RECEIPT_ANCHORED_TOPIC, ANCHOR_SCHEME };
 export const DEFAULT_KEYS_URL = 'https://fractalai.net.co/.well-known/x402-receipt-keys';
+export const KNOWN_DEPLOYMENTS = Object.fromEntries(Object.entries(BAKED_ROOTS.anchors.evm).map(([k, d]) => [k, { address: d.contract, from_block: d.from_block, network: d.name, runtime_codehash: d.runtime_codehash }]));
+export const PQC_ANCHOR_RUNTIME_CODEHASH = BAKED_ROOTS.anchors.evm['42161'].runtime_codehash;
+export const DEFAULT_RPC_BY_CHAIN = Object.fromEntries(Object.entries(BAKED_ROOTS.anchors.evm).map(([k, d]) => [k, d.default_rpc]));
 
-const sha256hex = (data) => createHash('sha256').update(data).digest('hex');
+const sealMessage = (seal) => (seal.canonical !== undefined
+  ? KINDS['midas-alert'].message(sha256hex(seal.canonical))
+  : `${seal.domain}\n${seal.content_id}`);
 
-/** Pure: the three bytes32 values a seal anchors to. Throws on non-ML-DSA-65 sizes. */
+/** The three bytes32 values a seal anchors to (informational; the kernel recomputes them from signed bytes). */
 export function deriveAnchorIds(seal) {
   const sig = Buffer.from(seal.signature, 'base64');
   if (sig.length !== 3309) throw new Error(`ML-DSA-65 signature must be 3309 bytes, got ${sig.length}`);
-  const pk = Buffer.from(seal.public_key, 'base64');
-  if (pk.length !== 1952) throw new Error(`ML-DSA-65 public key must be 1952 bytes, got ${pk.length}`);
-  const signedMessage = `${seal.domain}\n${seal.content_id}`;
+  if (Buffer.from(seal.public_key, 'base64').length !== 1952) throw new Error('ML-DSA-65 public key must be 1952 bytes');
+  const signedMessage = sealMessage(seal);
   return {
-    receipt_id: '0x' + sha256hex(sig),
-    payload_hash: '0x' + sha256hex(Buffer.from(signedMessage, 'utf8')),
-    kid: '0x' + sha256hex(seal.public_key).slice(0, 16).padEnd(64, '0'),
-    signed_message: signedMessage,
+    receipt_id: '0x' + sha256hex(sig), payload_hash: '0x' + sha256hex(signedMessage),
+    kid: '0x' + sha256hex(seal.public_key).slice(0, 16).padEnd(64, '0'), signed_message: signedMessage,
   };
 }
 
-async function rpc(url, method, params, fetchImpl, timeoutMs = 15000) {
-  const res = await fetchImpl(url, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (!res.ok) throw new Error(`rpc ${method} HTTP ${res.status}`);
-  const j = await res.json();
-  if (j.error) throw new Error(`rpc ${method}: ${j.error.message || JSON.stringify(j.error)}`);
-  return j.result;
-}
-
-const hexToInt = (h) => (typeof h === 'string' ? parseInt(h, 16) : Number(h));
-const lc = (s) => String(s || '').toLowerCase();
-
 /**
- * Keys accepted from a FractalAI-style key directory: `active` and `retiring` (not yet past not_after),
- * plus legacy epoch-1 entries without lifecycle fields. `revoked`/`reserved` never verify receipts.
+ * Keys usable NOW from a key directory — only if the directory verifies against the PINNED roots
+ * (governance signature, root, checkpoint/anti-rollback). An unsigned or foreign directory yields [].
+ * Prefer passing the whole directory to the kernel: it evaluates each key at the receipt's SIGNED time.
  */
 export function trustedKeysFromDirectory(directory, nowSec = Math.floor(Date.now() / 1000)) {
-  const keys = Array.isArray(directory?.keys) ? directory.keys : [];
-  return keys.filter((k) => {
-    if (typeof k?.public_key_b64 !== 'string') return false;
-    if (k.status === undefined) return true; // epoch-1 historical shape
-    if (k.status !== 'active' && k.status !== 'retiring') return false;
-    if (typeof k.not_after === 'number' && nowSec > k.not_after) return false;
-    return true;
-  }).map((k) => k.public_key_b64);
-}
-
-/**
- * Verify a seal that carries `seal.anchor` (or pass `opts.anchor`).
- *
- * @param {object} seal  { algorithm, domain, content_id, public_key, signature, body, anchor? }
- * @param {object} [opts]
- * @param {string[]} [opts.trustedPublicKeysB64]  pin the issuer's keys; omit → keyTrusted:null (integrity only)
- * @param {string}   [opts.rpcUrl]                any JSON-RPC for the anchor's chain (default by chain_id)
- * @param {string}   [opts.contract]              expected PQCReceiptAnchor address (default: seal.anchor.contract)
- * @param {string}   [opts.expectedAnchoredBy]    optionally pin the anchoring EOA
- * @param {object}   [opts.anchor]                anchor reference if not embedded in the seal
- * @param {Function} [opts.fetchImpl]
- * @param {number}   [opts.minConfirmations]      default 1 (Arbitrum L2 blocks; L1 finality is a separate matter)
- */
-export async function verifyAnchoredSeal(seal, opts = {}) {
-  const fetchImpl = opts.fetchImpl ?? fetch;
-  const out = {
-    valid: false, signature_valid: false, key_trusted: null, anchor_valid: false,
-    mode: 'unknown', chain_id: null, block_number: null, anchored_at: null, anchored_by: null, tx_hash: null,
-    receipt_id: null, payload_hash: null, kid: null, reason: '',
-  };
   try {
-    // 1) Signature + integrity, fully offline.
-    const sv = verifySeal(seal, { trustedPublicKeysB64: opts.trustedPublicKeysB64 });
-    out.mode = sv.mode; out.key_trusted = sv.keyTrusted;
-    out.signature_valid = sv.valid || sv.reason === 'signature valid but key not trusted';
-    if (!sv.valid) { out.reason = `seal: ${sv.reason}`; return out; }
-
-    // 2) Recompute what MUST be on-chain.
-    const ids = deriveAnchorIds(seal);
-    out.receipt_id = ids.receipt_id; out.payload_hash = ids.payload_hash; out.kid = ids.kid;
-
-    const anchor = opts.anchor ?? seal.anchor;
-    if (!anchor || typeof anchor !== 'object') { out.reason = 'no anchor reference (seal.anchor missing) — signature valid, nothing anchored'; return out; }
-    if (anchor.scheme && anchor.scheme !== ANCHOR_SCHEME) { out.reason = `unknown anchor scheme '${anchor.scheme}'`; return out; }
-    const contract = lc(opts.contract ?? anchor.contract);
-    if (!/^0x[0-9a-f]{40}$/.test(contract)) { out.reason = 'anchor.contract is not an address'; return out; }
-    const chainId = Number(anchor.chain_id);
-    out.chain_id = chainId;
-    const rpcUrl = opts.rpcUrl ?? DEFAULT_RPC_BY_CHAIN[chainId];
-    if (!rpcUrl) { out.reason = `no RPC known for chain ${chainId}; pass rpcUrl`; return out; }
-
-    // The anchor reference's own claims must match what we recomputed (cheap local check first).
-    if (anchor.receipt_id && lc(anchor.receipt_id) !== ids.receipt_id) { out.reason = 'anchor.receipt_id != sha256(signature)'; return out; }
-    if (anchor.payload_hash && lc(anchor.payload_hash) !== ids.payload_hash) { out.reason = 'anchor.payload_hash != sha256(signed bytes)'; return out; }
-
-    // 3) Chain id — refuse to read a log from the wrong network.
-    const liveChain = hexToInt(await rpc(rpcUrl, 'eth_chainId', [], fetchImpl));
-    if (liveChain !== chainId) { out.reason = `rpc chain id ${liveChain} != anchor.chain_id ${chainId}`; return out; }
-
-    // 4) Locate the event: by tx hash + log index when known, else by receiptId topic over the contract.
-    let log = null;
-    if (typeof anchor.tx_hash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(anchor.tx_hash)) {
-      const rcpt = await rpc(rpcUrl, 'eth_getTransactionReceipt', [anchor.tx_hash], fetchImpl);
-      if (!rcpt) { out.reason = `tx ${anchor.tx_hash} not found (pending or wrong chain)`; return out; }
-      if (hexToInt(rcpt.status) !== 1) { out.reason = `tx ${anchor.tx_hash} reverted`; return out; }
-      const logs = Array.isArray(rcpt.logs) ? rcpt.logs : [];
-      const candidates = logs.filter((l) => lc(l.address) === contract && lc(l.topics?.[0]) === RECEIPT_ANCHORED_TOPIC && lc(l.topics?.[1]) === ids.receipt_id);
-      if (typeof anchor.log_index === 'number') {
-        log = candidates.find((l) => hexToInt(l.logIndex) === anchor.log_index) ?? null;
-        if (!log) { out.reason = `tx ${anchor.tx_hash} has no ReceiptAnchored(receiptId) log at log_index ${anchor.log_index}`; return out; }
-      } else {
-        log = candidates[0] ?? null;
-        if (!log) { out.reason = `tx ${anchor.tx_hash} contains no ReceiptAnchored log for this receiptId`; return out; }
-      }
-      out.tx_hash = anchor.tx_hash;
-    } else {
-      const logs = await rpc(rpcUrl, 'eth_getLogs', [{ address: contract, topics: [RECEIPT_ANCHORED_TOPIC, ids.receipt_id], fromBlock: '0x0', toBlock: 'latest' }], fetchImpl);
-      if (!Array.isArray(logs) || logs.length === 0) { out.reason = 'no ReceiptAnchored event for this receiptId on the contract'; return out; }
-      if (logs.length > 1) { out.reason = 'multiple ReceiptAnchored events for one receiptId — contract invariant broken, refusing'; return out; }
-      log = logs[0]; out.tx_hash = log.transactionHash ?? null;
-    }
-
-    // 5) The on-chain record must match the recomputed values exactly.
-    if (lc(log.topics[2]) !== ids.payload_hash) { out.reason = 'on-chain payloadHash != sha256(signed bytes) — anchored bytes differ from this seal'; return out; }
-    if (lc(log.topics[3]) !== ids.kid) { out.reason = 'on-chain kid != sha256(public_key)[:16] — anchored under a different key id'; return out; }
-    const data = String(log.data || '0x').slice(2);
-    if (data.length < 192) { out.reason = 'malformed event data'; return out; }
-    const observedAt = parseInt(data.slice(0, 64), 16);
-    const anchoredBy = '0x' + data.slice(64 + 24, 128);
-    const anchoredAt = parseInt(data.slice(128, 192), 16);
-    out.anchored_by = anchoredBy; out.anchored_at = anchoredAt; out.block_number = hexToInt(log.blockNumber);
-    if (opts.expectedAnchoredBy && lc(opts.expectedAnchoredBy) !== lc(anchoredBy)) { out.reason = `anchoredBy ${anchoredBy} != expected ${opts.expectedAnchoredBy}`; return out; }
-    if (Number.isFinite(observedAt) && observedAt > anchoredAt + 15 * 60) { out.reason = 'observedAt after anchoredAt beyond skew — inconsistent'; return out; }
-
-    // 6) Confirmation depth (L2 blocks).
-    const minConf = opts.minConfirmations ?? 1;
-    if (minConf > 0) {
-      const head = hexToInt(await rpc(rpcUrl, 'eth_blockNumber', [], fetchImpl));
-      if (head - out.block_number + 1 < minConf) { out.reason = `only ${head - out.block_number + 1} confirmations (< ${minConf})`; return out; }
-    }
-
-    out.anchor_valid = true;
-    out.valid = true;
-    out.reason = out.key_trusted === null
-      ? 'ok (signature + anchor verified; NO key pin supplied — integrity proven, issuer identity NOT authenticated)'
-      : 'ok';
-    return out;
-  } catch (e) {
-    out.reason = `${e?.constructor?.name ?? 'Error'}: ${e?.message ?? String(e)}`;
-    return out;
+    const dir = parseJsonStrict(typeof directory === 'string' ? directory : JSON.stringify(directory));
+    const cp = BAKED_ROOTS.directory_checkpoint;
+    const d = verifyDirectoryChain(dir, { governanceKeyB64: BAKED_ROOTS.governance.public_key_b64, checkpoint: { epoch: cp.epoch, root: cp.root } });
+    return d.keys.filter((k) => keyAuthorizes(k, { uses: KINDS['midas-alert'].uses, signedTime: null, now: nowSec, anchorTime: null, skew: 0 }).ok).map((k) => k.public_key_b64);
+  } catch {
+    return [];
   }
 }
 
-/** Fetch the public key directory and return the currently-acceptable receipt keys. */
-export async function fetchTrustedKeys(url = DEFAULT_KEYS_URL, fetchImpl = fetch) {
-  const res = await fetchImpl(url, { signal: AbortSignal.timeout(15000) });
-  if (!res.ok) throw new Error(`key directory HTTP ${res.status}`);
-  return trustedKeysFromDirectory(await res.json());
+function kindsFor(seal) {
+  if (seal && typeof seal === 'object' && seal.canonical !== undefined) return ['midas-alert'];
+  return ['x402-seal', 'self-attest-seal'];
+}
+
+/**
+ * Verify an anchored seal or MIDAS receipt. Legacy options are mapped onto the kernel:
+ *   trustedPublicKeysB64 → trustedKeys (override) · keyDirectory → directory (pinned roots)
+ *   rpcUrl / crossCheckRpcUrls → per-chain RPC list (all must agree) · requireFinalized → policy
+ *   minConfirmations → policy · expectedAnchoredBy → post-check on the consensus fact `anchored_by`
+ *   contract → must equal the pinned deployment (an unpinned address is refused, never trusted)
+ * Returns the legacy flat fields + `verdict` (the full leveled kernel verdict).
+ */
+export async function verifyAnchoredSeal(seal, opts = {}) {
+  const refs = opts.anchor ? [opts.anchor] : Array.isArray(seal?.anchors) ? seal.anchors : seal?.anchor ? [seal.anchor] : [];
+  const cleanRefs = refs.map((r) => (r && typeof r === 'object' ? { ...r, chain_id: Number(r.chain_id), ...(opts.contract ? { contract: opts.contract } : {}) } : r));
+  const rpc = {};
+  for (const r of cleanRefs) {
+    if (!r || r.chain === 'solana') continue;
+    const key = `eip155:${r.chain_id}`;
+    const urls = [opts.rpcUrl ?? DEFAULT_RPC_BY_CHAIN[r.chain_id], ...(opts.crossCheckRpcUrls || [])].filter(Boolean);
+    if (urls.length) rpc[key] = urls;
+  }
+  const { anchor, anchors, ...bare } = seal || {};
+  const policy = { require: ['integrity', 'authentic', 'trusted', 'time_anchored', ...(opts.requireFinalized ? ['finalized'] : [])], minConfirmations: opts.minConfirmations ?? 1, allowTestnetAnchors: opts.allowTestnet === true };
+  const k = { kinds: kindsFor(seal), checkAnchors: true, anchors: JSON.stringify(cleanRefs), rpc, policy, fetchImpl: opts.fetchImpl, now: opts.now };
+  if (opts.trustedPublicKeysB64) k.trustedKeys = JSON.stringify(opts.trustedPublicKeysB64);
+  if (opts.keyDirectory) k.directory = typeof opts.keyDirectory === 'string' ? opts.keyDirectory : JSON.stringify(opts.keyDirectory);
+  let v;
+  try { v = await verify(JSON.stringify(bare), k); } catch (e) { return { valid: false, reason: `verify error: ${e.message}` }; }
+  const best = v.anchors.find((a) => a.counts) ?? v.anchors.find((a) => a.facts) ?? null;
+  const f = best?.facts ?? {};
+  let valid = v.valid;
+  let reason = v.valid ? 'ok' : v.reasons.map((r) => `${r.code}: ${r.detail}`).join(' | ') || 'not valid';
+  if (valid && opts.expectedAnchoredBy && String(f.anchored_by).toLowerCase() !== String(opts.expectedAnchoredBy).toLowerCase()) {
+    valid = false; reason = `anchoredBy ${f.anchored_by} != expected ${opts.expectedAnchoredBy}`;
+  }
+  const noTrust = !opts.trustedPublicKeysB64 && !opts.keyDirectory;
+  return {
+    valid, signature_valid: v.levels.authentic, key_trusted: !v.levels.authentic ? false : noTrust ? null : v.levels.trusted,
+    anchor_valid: v.levels.time_anchored === true,
+    mode: v.kind === 'x402-seal' ? 'notary' : v.kind === 'self-attest-seal' ? 'self-attest' : v.kind ?? 'unknown',
+    chain_id: f.chain ? Number(String(f.chain).split(':')[1]) : null, network_class: f.network_class ?? null,
+    contract: f.contract ?? null, contract_known: !!f.contract && Object.values(BAKED_ROOTS.anchors.evm).some((d) => d.contract === f.contract), codehash_ok: !!f.contract,
+    block_number: f.block_number ?? null, block_hash: f.block_hash ?? null,
+    anchored_at: f.time ?? null, anchored_by: f.anchored_by ?? null, observed_at: f.observed_at ?? null,
+    finalized: f.finalized ?? null, tx_hash: f.tx_hash ?? null, rpc_cross_checked: f.rpc_count ? f.rpc_count - 1 : 0,
+    anchors_tried: v.anchors.length, reason, verdict: v,
+  };
+}
+
+/** Fetch the raw key directory (bounded; strict JSON). The kernel verifies it against the pinned roots. */
+export async function fetchKeyDirectory(url = DEFAULT_KEYS_URL, fetchImpl) {
+  return parseJsonStrict(await boundedFetch(url, { headers: { accept: 'application/json' }, ...(fetchImpl ? { fetchImpl } : {}) }));
+}
+/** Keys usable now from the fetched directory (verified against the pinned roots; [] otherwise). */
+export async function fetchTrustedKeys(url = DEFAULT_KEYS_URL, fetchImpl) {
+  return trustedKeysFromDirectory(await fetchKeyDirectory(url, fetchImpl));
 }
 
 // ── CLI ───────────────────────────────────────────────────────────────────────────────────────
 const isMain = typeof process !== 'undefined' && process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 if (isMain) {
   const args = process.argv.slice(2);
-  const file = args.find((a) => !a.startsWith('--'));
-  const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
-  if (!file) {
-    console.error('usage: node verify-anchor.mjs <seal.json> [--rpc URL] [--contract 0x…] [--keys-url URL] [--no-key-pin] [--anchored-by 0x…]');
-    process.exit(2);
-  }
-  const raw = JSON.parse(readFileSync(file, 'utf8'));
-  const seal = raw.seal ?? raw; // accept the full /api/x402/witness response or the bare seal
-  const trusted = args.includes('--no-key-pin') ? undefined : await fetchTrustedKeys(opt('--keys-url') ?? DEFAULT_KEYS_URL);
-  const result = await verifyAnchoredSeal(seal, { trustedPublicKeysB64: trusted, rpcUrl: opt('--rpc'), contract: opt('--contract'), expectedAnchoredBy: opt('--anchored-by') });
-  console.log(JSON.stringify(result, null, 2));
-  process.exit(result.valid ? 0 : 1);
+  const opt = (n) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
+  const many = (n) => args.flatMap((a, i) => (a === n ? [args[i + 1]] : []));
+  const file = args.find((a, i) => !a.startsWith('--') && !(i > 0 && args[i - 1].startsWith('--') && !['--finalized', '--allow-testnet', '--known-anchorer'].includes(args[i - 1])));
+  if (!file) { console.error('usage: x402-verify-anchor <seal.json> [--rpc URL] [--cross-rpc URL]… [--finalized] [--keys-url URL] [--trusted-key B64]…'); process.exit(EXIT.USAGE); }
+  let raw;
+  try { raw = parseJsonStrict(readFileSync(file, 'utf8')); } catch (e) { console.error(`error: ${oneLine(e.detail ?? e.message)}`); process.exit(EXIT.INPUT); }
+  const seal = raw.seal && !raw.canonical && !raw.body ? { ...raw.seal, ...(raw.anchor && !raw.seal.anchor ? { anchor: raw.anchor } : {}) } : raw;
+  const trusted = many('--trusted-key');
+  const keyDirectory = trusted.length ? undefined : await boundedFetch(opt('--keys-url') ?? DEFAULT_KEYS_URL).catch((e) => { console.error(`error: key directory: ${oneLine(e.detail ?? e.message)}`); process.exit(EXIT.INPUT); });
+  const r = await verifyAnchoredSeal(seal, {
+    keyDirectory, trustedPublicKeysB64: trusted.length ? trusted : undefined, rpcUrl: opt('--rpc'), crossCheckRpcUrls: many('--cross-rpc'),
+    requireFinalized: args.includes('--finalized'), allowTestnet: args.includes('--allow-testnet'), expectedAnchoredBy: opt('--anchored-by'),
+  });
+  const { verdict, ...flat } = r;
+  console.log(safeJson(flat));
+  process.exit(r.valid ? EXIT.VALID : (verdict?.exit_code || EXIT.time_anchored));
 }

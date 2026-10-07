@@ -1,9 +1,11 @@
 {
   "name": "@fractalai/pqc-agent-receipts-conformance",
-  "version": "0.3.0",
-  "description": "Neutral conformance suite + golden vectors for post-quantum (ML-DSA-65 / FIPS-204) signed agent receipts + agent identity — x402 served, SAR, ACP verdict, RFC 9964 JOSE, W3C VC-DI, Corrente Labs HAI (wg-identity#27), CSOAI A2A signed-receipts/v1 (A2A#2150). Verified offline with @noble.",
+  "version": "0.4.0",
+  "description": "Neutral conformance suite + golden vectors for post-quantum (ML-DSA-65 / FIPS-204) signed agent receipts + agent identity \u2014 x402 served, SAR, ACP verdict, RFC 9964 JOSE, W3C VC-DI, Corrente Labs HAI (wg-identity#27), CSOAI A2A signed-receipts/v1 (A2A#2150). Verified offline with @noble.",
   "type": "module",
-  "bin": { "pqc-receipt-check": "src/check.mjs" },
+  "bin": {
+    "pqc-receipt-check": "src/check.mjs"
+  },
   "exports": {
     ".": "./src/profiles.mjs",
     "./check": "./src/check.mjs",
@@ -11,18 +13,45 @@
     "./watchtower": "./src/watchtower.mjs",
     "./verify-chain": "./src/verify-chain.mjs"
   },
-  "files": ["src/profiles.mjs", "src/check.mjs", "src/gen-vectors.mjs", "src/key-directory.mjs", "src/watchtower.mjs", "src/verify-chain.mjs", "vectors", "README.md"],
-  "publishConfig": { "access": "public" },
+  "files": [
+    "src/profiles.mjs",
+    "src/check.mjs",
+    "src/gen-vectors.mjs",
+    "src/key-directory.mjs",
+    "src/watchtower.mjs",
+    "src/verify-chain.mjs",
+    "vectors",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "gen": "node src/gen-vectors.mjs",
     "check": "node src/check.mjs",
-    "test": "node src/gen-vectors.mjs && node src/check.mjs && node --test src/key-directory.test.mjs src/watchtower.test.mjs src/verify-chain.test.mjs"
+    "test": "node src/gen-vectors.mjs && node src/check.mjs && node --test src/*.test.mjs"
   },
-  "keywords": ["post-quantum", "ml-dsa-65", "fips-204", "rfc-9964", "x402", "a2a", "ap2", "agent-receipts", "conformance", "cose-receipts", "agent-identity", "wg-identity"],
+  "keywords": [
+    "post-quantum",
+    "ml-dsa-65",
+    "fips-204",
+    "rfc-9964",
+    "x402",
+    "a2a",
+    "ap2",
+    "agent-receipts",
+    "conformance",
+    "cose-receipts",
+    "agent-identity",
+    "wg-identity"
+  ],
   "author": "FractalAI",
   "license": "Apache-2.0",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "@noble/post-quantum": "^0.6.1"
+    "@fractalai/pqc-trust-kernel": "file:../kernel",
+    "@noble/post-quantum": "~0.6.1"
   }
 }

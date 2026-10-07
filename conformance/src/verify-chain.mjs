@@ -14,6 +14,7 @@
  * trusted === all supplied steps pass. Pure, offline, @noble only. This is what the standards inserts
  * mean by "verify it yourself, talking to nobody" — now as a single end-to-end statement.
  */
+import { verifySync } from '@fractalai/pqc-trust-kernel';
 import { verifyProfile } from './profiles.mjs';
 import { verifyDirectory } from './key-directory.mjs';
 import { auditHistory } from './watchtower.mjs';
@@ -47,12 +48,20 @@ export function verifyReceiptChain(input) {
   }
 
   // 1) DIRECTORY — establishes which keys are authentic (fail-closed: needs governanceKey or anchoredRoot).
-  const d = verifyDirectory(input.directory || {}, { governanceKey: input.governanceKey, anchoredRoot: input.anchoredRoot });
+  const d = verifyDirectory(input.directory || {}, { governanceKey: input.governanceKey, anchoredRoot: input.anchoredRoot, at: input.at });
   steps.directory = d;
   if (!d.valid) return { trusted: false, reason: `directory not trusted: ${d.reason}`, ...posture(), warnings, steps };
 
-  // 2) RECEIPT — must be signed by a key IN that trusted directory.
-  const r = verifyProfile(input.profile, input.receipt, { trustedKeys: d.trustedKeys });
+  // 2) RECEIPT — FractalAI kinds go straight to the kernel (lifecycle at the SIGNED time, use<->domain
+  //    binding); third-party profiles get the keys the kernel authorizes NOW from the verified directory.
+  const KIND = { 'x402-served': 'served-proof', 'acp-verdict': 'acp-verdict' };
+  let r;
+  if (KIND[input.profile]) {
+    const kv = verifySync(JSON.stringify(input.receipt ?? null), { kind: KIND[input.profile], directory: JSON.stringify(input.directory), ...(input.governanceKey ? { governanceKey: input.governanceKey } : {}), ...(input.anchoredRoot && !input.governanceKey ? { allowTlsDirectory: true } : {}) });
+    r = { valid: kv.valid, signatureValid: kv.levels.authentic, keyTrusted: kv.levels.trusted, reason: kv.valid ? 'authentic (Trust Kernel v2)' : kv.reasons.map((x) => `${x.code}: ${x.detail}`).join(' | '), verdict: kv };
+  } else {
+    r = verifyProfile(input.profile, input.receipt, { trustedKeys: d.trustedKeys });
+  }
   steps.receipt = r;
   if (!r.valid) return { trusted: false, reason: `receipt not authentic: ${r.reason}`, ...posture(), warnings, steps };
 

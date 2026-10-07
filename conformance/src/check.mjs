@@ -12,6 +12,7 @@
  * Exit 0 iff every profile passes all four assertions.
  */
 import { readdirSync, readFileSync } from 'node:fs';
+import { parseJsonStrict } from '@fractalai/pqc-trust-kernel';
 import { verifyProfile, PROFILES } from './profiles.mjs';
 
 const dir = new URL((process.argv[2] ? process.argv[2].replace(/\/?$/, '/') : '../vectors/'), import.meta.url);
@@ -20,7 +21,8 @@ const files = readdirSync(dir).filter((f) => f.endsWith('.json'));
 let pass = 0, fail = 0;
 const rows = [];
 for (const f of files) {
-  const v = JSON.parse(readFileSync(new URL(f, dir)));
+  let v;
+  try { v = parseJsonStrict(readFileSync(new URL(f, dir), 'utf8')); } catch (e) { rows.push({ profile: f, ok: false }); fail++; continue; }
   const profile = v.profile;
   const trusted = [v.trusted_public_key];
   // Authentic: genuine receipt with the trusted key pinned.
@@ -44,7 +46,10 @@ console.log(pad('profile', 18), pad('authentic', 10), pad('fail-closed', 12), pa
 console.log('-'.repeat(78));
 for (const r of rows) console.log(pad(r.profile, 18), pad(yn(r.genuine), 10), pad(yn(r.failClosed), 12), pad(yn(r.tamperRejected), 9), pad(yn(r.forgeRejected), 9), r.ok ? 'OK' : '✗ FAIL');
 
-const missing = PROFILES.filter((p) => !rows.some((r) => r.profile === p));
-if (missing.length) console.log(`\nprofiles with no vector present: ${missing.join(', ')}`);
-console.log(`\n${fail === 0 ? '✅ CONFORMANT' : '❌ NON-CONFORMANT'} — ${pass}/${rows.length} profiles: accept genuine trusted key · reject no-trust · reject tamper · reject different-key forgery`);
-process.exit(fail === 0 ? 0 : 1);
+// Fail closed (red-team poc6): an empty vector set, a missing profile, or a duplicated one is NOT conformance.
+const missing = PROFILES.filter((p) => !rows.some((r) => r.profile === p && r.ok));
+const dup = rows.length !== new Set(rows.map((r) => r.profile)).size;
+if (missing.length) console.log(`\nprofiles with no passing vector: ${missing.join(', ')}`);
+const conformant = fail === 0 && rows.length > 0 && missing.length === 0 && !dup;
+console.log(`\n${conformant ? '✅ CONFORMANT' : '❌ NON-CONFORMANT'} — ${pass}/${PROFILES.length} profiles: accept genuine trusted key · reject no-trust · reject tamper · reject different-key forgery`);
+process.exit(conformant ? 0 : 1);

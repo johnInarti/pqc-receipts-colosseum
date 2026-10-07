@@ -1,7 +1,9 @@
 /**
  * solana-anchor — the REAL public MIDAS receipt fe62b072… (ML-DSA-65, production key), REAL Ed25519
  * transactions built and signed with the same code that anchors on devnet/mainnet, and a mocked Solana
- * JSON-RPC answering getTransaction / getSignatureStatuses the way a node does. Fail-closed everywhere.
+ * JSON-RPC answering getGenesisHash / getTransaction / getSignatureStatuses the way a devnet node does.
+ * Migrated 2026-10-07 to Trust Kernel v2 semantics: the test signer is an explicit announced-signer OVERRIDE
+ * (expectedSigner), devnet is marked "test", reasons are kernel codes. Fail-closed everywhere.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -34,8 +36,9 @@ function makeTx({ kp = anchorKp, memo = MEMO, programId = MEMO_PROGRAM_ID } = {}
 
 function mockRpc({ wire, err = null, status = 'finalized', missing = false } = {}) {
   return async (_url, init) => {
-    const { method, params } = JSON.parse(init.body);
-    const reply = (result) => ({ ok: true, json: async () => ({ jsonrpc: '2.0', id: 1, result }) });
+    const { id, method, params } = JSON.parse(init.body);
+    const reply = (result) => ({ ok: true, status: 200, headers: { get: () => 'application/json' }, text: async () => JSON.stringify({ jsonrpc: '2.0', id, result }) });
+    if (method === 'getGenesisHash') return reply('EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG');
     if (method === 'getTransaction') {
       assert.equal(params[1].commitment, 'finalized');
       return reply(missing ? null : { slot: 4242, blockTime: 1791300000, meta: { err }, transaction: [Buffer.from(wire).toString('base64'), 'base64'] });
@@ -68,24 +71,26 @@ test('base58 + wire format round-trip', () => {
 test('genuine anchor → VALID', async () => {
   const r = await run(makeTx());
   assert.equal(r.valid, true, r.reason);
-  assert.equal(r.reason, 'ok');
+  assert.match(r.reason, /^ok \(devnet is a TEST cluster/);
+  assert.equal(r.network_class, 'test');
   assert.equal(r.signer, anchorKp.pubkey);
   assert.equal(r.program, MEMO_PROGRAM_ID);
-  assert.equal(r.onchain_memo, MEMO);
+  assert.equal(r.expected_memo, MEMO);
+  assert.ok(r.verdict.overrides.includes('solanaSigners'), 'the test signer is an explicit override');
 });
 
 test('altered memo → INVALID', async () => {
   for (const memo of [MEMO.replace('obs=1790473960', 'obs=1790473961'), MEMO + ' ', MEMO.toUpperCase(), MEMO.replace('|rid=b9', '|rid=b8')]) {
     const r = await run(makeTx({ memo }));
     assert.equal(r.valid, false);
-    assert.match(r.reason, /not byte-identical/);
+    assert.match(r.reason, /SOL_MEMO_MISMATCH/);
   }
 });
 
 test('different signer → INVALID', async () => {
   const r = await run(makeTx({ kp: otherKp }));
   assert.equal(r.valid, false);
-  assert.match(r.reason, /!= announced/);
+  assert.match(r.reason, /SOL_SIGNER_NOT_ANNOUNCED/);
 });
 
 test('altered receipt → INVALID (canonical, signature, emitted_at)', async () => {
@@ -104,19 +109,19 @@ test('altered receipt → INVALID (canonical, signature, emitted_at)', async () 
 test('tx of another program carrying the same bytes → INVALID', async () => {
   const r = await run(makeTx({ programId: SYSTEM_PROGRAM }));
   assert.equal(r.valid, false);
-  assert.match(r.reason, /is not SPL Memo/);
+  assert.match(r.reason, /SOL_NOT_MEMO/);
 });
 
 test('not finalized / failed / missing / forged Ed25519 / untrusted ML-DSA key → INVALID', async () => {
   const tx = makeTx();
-  assert.match((await run(tx, { rpc: { missing: true } })).reason, /not found at finalized/);
-  assert.match((await run(tx, { rpc: { err: { InstructionError: [0, 'Custom'] } } })).reason, /failed on-chain/);
-  assert.match((await run(tx, { rpc: { status: 'confirmed' } })).reason, /not finalized/);
+  assert.match((await run(tx, { rpc: { missing: true } })).reason, /ANCHOR_NOT_FOUND/);
+  assert.match((await run(tx, { rpc: { err: { InstructionError: [0, 'Custom'] } } })).reason, /ANCHOR_TX_FAILED/);
+  assert.match((await run(tx, { rpc: { status: 'confirmed' } })).reason, /SOL_NOT_FINALIZED/);
   // RPC serves a tx whose message was altered after signing (memo swapped, signature kept).
   const forged = Buffer.from(tx.wire); forged[forged.length - 1] ^= 1;
-  assert.match((await run(tx, { rpc: { wire: forged } })).reason, /Ed25519 signature/);
+  assert.match((await run(tx, { rpc: { wire: forged } })).reason, /SOL_ED25519_INVALID/);
   // RPC serves a different tx than the one asked for.
-  assert.match((await run(tx, { rpc: { wire: makeTx({ memo: MEMO + 'x' }).wire } })).reason, /first signature differs/);
-  assert.match((await run(tx, { opts: { trustedPublicKeysB64: ['AAAA'] } })).reason, /not in trusted set/);
-  assert.match((await run(tx, { opts: { expectedSigner: undefined } })).reason, /expectedSigner/);
+  assert.match((await run(tx, { rpc: { wire: makeTx({ memo: MEMO + 'x' }).wire } })).reason, /SOL_SIGNATURE_MISMATCH/);
+  assert.match((await run(tx, { opts: { trustedPublicKeysB64: ['AAAA'] } })).reason, /KEY_NOT_IN_PINNED_SET/);
+  assert.match((await run(tx, { opts: { expectedSigner: undefined } })).reason, /SOL_SIGNER_NOT_ANNOUNCED/);
 });

@@ -1,29 +1,33 @@
 #!/usr/bin/env node
-// Verify one FractalAI MIDAS signed alert receipt from outside, with no trust in FractalAI's TLS beyond
-// fetching the public key directory (pin it after the first run if you prefer).
-// usage: node verify-midas-alert.mjs [receipt_id]   (default: the public receipt fe62b072…)
-import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js';
-import { createHash } from 'node:crypto';
+// Verify one FractalAI MIDAS signed alert end to end — every decision by Trust Kernel v2:
+// the receipt is bound to the id you asked for, the signed message is REBUILT (never read from the receipt),
+// unsigned fields (facts, emitted_at, snapshot) must match what was signed, and the key directory must verify
+// against the PINNED governance key + epoch checkpoint baked in kernel/trust-roots.json (TLS is transport only).
+// Fetches have a hard deadline covering headers AND body and a 2 MiB cap.
+// usage: node verify-midas-alert.mjs [receipt_id] [--json]   (default: the public receipt fe62b072…)
+// exit: 0 valid · 10 integrity · 11 authentic · 12 trusted · 3 could not fetch
+import { verify, boundedFetch, oneLine, safeJson, EXIT } from '@fractalai/pqc-trust-kernel';
 
-const id = process.argv[2] || 'fe62b072c2740e7a8d10cf7e643905b7d79f3f9b19f1c3970fc8754f18d538ee';
+const args = process.argv.slice(2);
+const id = args.find((a) => !a.startsWith('--')) || 'fe62b072c2740e7a8d10cf7e643905b7d79f3f9b19f1c3970fc8754f18d538ee';
+if (!/^[0-9a-f]{64}$/.test(id)) { console.error('receipt id must be 64 lowercase hex'); process.exit(EXIT.USAGE); }
 const base = process.env.FRACTALAI_BASE || 'https://fractalai.net.co';
-const sha = (s) => createHash('sha256').update(s, 'utf8').digest('hex');
+const timeoutMs = Math.min(20000, Math.max(500, Number(process.env.FRACTALAI_FETCH_TIMEOUT_MS) || 20000));
 
-const r = await (await fetch(`${base}/api/midas/alerts/receipt/${id}`)).json();
-const dir = await (await fetch(`${base}/.well-known/x402-receipt-keys`)).json();
-
-const checks = {
-  receipt_id_is_sha256_of_canonical: sha(r.canonical) === r.receipt_id,
-  domain_string_matches: r.served_message === `FRACTALAI-x402-served-v1\nmidas-alert\n${id}`,
-  ml_dsa65_signature_valid: ml_dsa65.verify(
-    Buffer.from(r.signature, 'base64'),
-    new TextEncoder().encode(r.served_message),
-    Buffer.from(r.public_key, 'base64'),
-  ),
-  key_in_directory_status: dir.keys.find((k) => k.public_key_b64 === r.public_key)?.status ?? 'NOT_FOUND',
-  directory_epoch: dir.epoch,
-};
-console.log(JSON.stringify(checks, null, 2));
-const ok = checks.receipt_id_is_sha256_of_canonical && checks.domain_string_matches && checks.ml_dsa65_signature_valid && checks.key_in_directory_status === 'active';
-console.log(ok ? 'VALID (signature verified; key active in epoch-chained directory)' : 'INVALID or key not active');
-process.exit(ok ? 0 : 1);
+let receipt, directory;
+try {
+  receipt = await boundedFetch(`${base}/api/midas/alerts/receipt/${id}`, { timeoutMs, headers: { accept: 'application/json' } });
+  directory = await boundedFetch(`${base}/.well-known/x402-receipt-keys`, { timeoutMs, headers: { accept: 'application/json' } });
+} catch (e) {
+  console.error(`could not fetch: ${oneLine(e.detail ?? e.message)}`);
+  process.exit(EXIT.INPUT);
+}
+const v = await verify(receipt, { kind: 'midas-alert', expectedId: id, directory });
+if (args.includes('--json')) console.log(safeJson(v));
+else {
+  console.log(safeJson({ levels: v.levels, trust_basis: v.trust_basis, key: v.key, directory: v.directory, reasons: v.reasons }));
+  console.log(v.valid
+    ? `VALID (ML-DSA-65 signature over the rebuilt message; key ${v.key.status} at the signed time in directory epoch ${v.directory.epoch}, verified against pinned roots)`
+    : `INVALID — ${oneLine(v.reasons.map((r) => r.code).join(', '))}`);
+}
+process.exit(v.exit_code);

@@ -40,7 +40,7 @@ It checks: `receipt_id == sha256(canonical)`, the domain-separated message
 ## Repository layout
 
 ```
-verifier/      offline verifiers (ML-DSA-65 seal verification, MIDAS alert check, Arbitrum anchor check) + tests
+verifier/      offline verifiers (ML-DSA-65 seals, MIDAS alerts, EVM + Solana Memo anchor checks) + tests
 conformance/   neutral conformance suite + golden vectors for PQC-signed agent receipts (7 profiles: x402 served,
                x402 SAR, ACP verdict, RFC 9964 JOSE, W3C VC-DI, wg-identity HAI, A2A signed-receipts/v1)
 contracts/     PQCReceiptAnchor.sol (write-once, ownerless timestamp anchor; 20/20 Hardhat tests) and
@@ -94,6 +94,9 @@ done offline). No owner, no funds, no upgrade. **Deployed on two mainnets on 202
 
 ABIs and full records: `deployments/`. Source is not yet verified on Arbiscan (no API key); bytecode matches `solc 0.8.24`,
 optimizer 200 runs, viaIR, cancun. Total cost of both deployments + anchors: under US$0.05.
+
+**Solana: devnet verified, mainnet pending** — same `fractalai.pqc-receipt-anchor/1` ids carried in an SPL Memo signed by a
+announced Ed25519 key; `scripts/anchor-solana-memo.mjs`, `verifier/verify-solana-anchor.mjs`, `docs/SOLANA-PQC-RECEIPT-ANCHOR.md`.
 
 ### Reproduce the Arc deployment
 

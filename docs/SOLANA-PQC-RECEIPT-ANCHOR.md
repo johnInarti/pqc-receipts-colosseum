@@ -1,7 +1,10 @@
 # PQC-signed receipts anchored on Solana (SPL Memo)
 
-Estado: **devnet probado y verificado en vivo el 2026-10-06; mainnet pendiente de fondeo (≈0,000005 SOL por anclaje
-+ un saldo mínimo de cuenta, ver §5).** Mismo esquema `fractalai.pqc-receipt-anchor/1` y mismos identificadores que el
+Estado: **mainnet anclado y verificado el 2026-10-08** — tx
+[`cHiTTWYg…Ftw`](https://explorer.solana.com/tx/cHiTTWYgizzjyQAMdF4DyPdF7m6w21wJdgzCwb3G5r1Qy12wyFxi6zjPEHg271nj2tXNNFyMvGHR6S6gjgs6Ftw),
+slot 454584215, `finalized`, comisión 5000 lamports; VALID en los cinco niveles con el núcleo JS y el Python (base
+`pinned-root`). SOL de comisión adquirido desde la tesorería en Base vía Relay (0,000141 ETH → 0,003 SOL, tx Base
+`0x7b2ada29…cab5`). Devnet probado desde el 2026-10-06. Mismo esquema `fractalai.pqc-receipt-anchor/1` y mismos identificadores que el
 anclaje EVM de [ARC-PQC-RECEIPT-ANCHOR.md](./ARC-PQC-RECEIPT-ANCHOR.md); aquí no hay contrato: el registro es una
 transacción del programa **SPL Memo** firmada por una clave Ed25519 dedicada y anunciada.
 

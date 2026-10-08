@@ -120,8 +120,14 @@ done offline). No owner, no funds, no upgrade. **Deployed on two mainnets on 202
 ABIs and full records: `deployments/`. Source is not yet verified on Arbiscan (no API key); bytecode matches `solc 0.8.24`,
 optimizer 200 runs, viaIR, cancun. Total cost of both deployments + anchors: under US$0.05.
 
-**Solana: devnet verified, mainnet pending** — same `fractalai.pqc-receipt-anchor/1` ids carried in an SPL Memo signed by a
-announced Ed25519 key; `scripts/anchor-solana-memo.mjs`, `verifier/verify-solana-anchor.mjs`, `docs/SOLANA-PQC-RECEIPT-ANCHOR.md`.
+| Solana mainnet (SPL Memo) | announced signer [`7cpTE4C7…mN624`](https://explorer.solana.com/address/7cpTE4C7sRWsHyeGsiqTfwNv9ntyribrRJV3s8vmN624) (no contract: Memo program) | — | [`cHiTTWYg…Ftw`](https://explorer.solana.com/tx/cHiTTWYgizzjyQAMdF4DyPdF7m6w21wJdgzCwb3G5r1Qy12wyFxi6zjPEHg271nj2tXNNFyMvGHR6S6gjgs6Ftw) (slot 454584215, finalized) |
+
+**Solana mainnet: anchored and verified on 2026-10-08** — the same `fractalai.pqc-receipt-anchor/1` ids carried in an SPL
+Memo signed by the announced Ed25519 key (fee 5000 lamports). Independently verified by the JS and Python Trust Kernel
+implementations: VALID on all five levels (integrity, authentic, trusted, time_anchored, finalized), trust basis
+`pinned-root`. Record: `deployments/anchors/solana-mainnet-beta-fe62b072.json`; tooling: `scripts/anchor-solana-memo.mjs`,
+`verifier/verify-solana-anchor.mjs`, `docs/SOLANA-PQC-RECEIPT-ANCHOR.md`. Memo does not verify anything on-chain: ML-DSA-65
+is verified off-chain; the anchor proves existence-by-time.
 
 ### Reproduce the Arc deployment
 

@@ -30,7 +30,8 @@ subscribers, treasury 99.01 USDC**. One founder (Colombia), no employees, no pri
 
 Every trust decision in this repository is made by **one** implementation, [`kernel/`](kernel/), specified normatively
 in [`spec/TRUST-KERNEL.md`](spec/TRUST-KERNEL.md) and pinned down by an executable specification,
-[`corpus/`](corpus/) (129 vectors: every proof of concept from four internal red-teams + real production positives).
+[`corpus/`](corpus/) (173 vectors: every proof of concept from four internal red-teams + real production positives +
+the LatAm stablecoin receipts below).
 `verifier/`, `conformance/` and the Python package delegate to it or reproduce it; both the JavaScript kernel and the
 Python port pass the corpus at 100 %.
 
@@ -50,7 +51,7 @@ cd kernel && npm install
 node bin/fractalai-verify.mjs fe62b072c2740e7a8d10cf7e643905b7d79f3f9b19f1c3970fc8754f18d538ee        # VALID, exit 0
 node bin/fractalai-verify.mjs ../deployments/anchors/PQCReceiptAnchor-5042-fe62b072.json --anchors \
      --require integrity,authentic,trusted,time_anchored,finalized                                     # + Arc time proof
-cd ../corpus && npm install && node run.mjs --live                                                   # 129/129 + live 4/4
+cd ../corpus && npm install && node run.mjs --live                                                   # 173/173 + live 4/4
 ```
 
 The receipt is bound to the id you asked for, the signed message is rebuilt (never read from the receipt), the key
@@ -58,11 +59,36 @@ directory must verify against the **pinned** governance key and checkpoint, and 
 receipt kind at the receipt's **signed** time. `verifier/verify-midas-alert.mjs` does the same through the
 compatibility layer.
 
+## LatAm Stablecoin Receipts (Trust Kernel 2.1, kind `latam-stablecoin-receipt`)
+
+A post-quantum (ML-DSA-65) receipt that a transfer of a **pinned** Latin-American stablecoin — COPM (Polygon), BRLA
+(Polygon, Base), MXNB (Arbitrum One, Base), wARS / wBRL (Base) — already happened on-chain: token, amount (smallest
+units + decimal), from, to, tx, log index, block number / hash / time, confirmations and finality. The issuer reads the
+`Transfer` log from public RPCs (never from the requester) and refuses reverted transactions, foreign or look-alike
+contracts, mints/burns, non-canonical blocks and unfinalized blocks; the verifier (JS kernel and Python port)
+recomputes every fact from the chain (level `onchain`, multi-RPC) on top of the signature and key checks. Spec §12;
+use cases, limits and the proposed x402 endpoint in [`docs/LATAM-STABLECOIN-RECEIPTS.md`](docs/LATAM-STABLECOIN-RECEIPTS.md).
+
+```bash
+cd issuer && npm install && npm test                   # real COPM/BRLA/MXNB transfers replayed; refusals; CLI end to end
+node bin/fractalai-stablecoin-receipt.mjs keygen --out /tmp/test-key.json          # EPHEMERAL test key
+node bin/fractalai-stablecoin-receipt.mjs issue --chain 137 \
+  --tx 0x735bed7c7404f259b71b3ce6b3a1e26e65f9edad1602653754e79a1a251b29f1 --key /tmp/test-key.json \
+  --rpc https://polygon-bor-rpc.publicnode.com --rpc https://polygon.drpc.org --out /tmp/copm.json
+node ../kernel/bin/fractalai-verify.mjs /tmp/copm.json --kind latam-stablecoin-receipt --trusted-key <public_key_b64> \
+  --onchain --rpc eip155:137=https://polygon-bor-rpc.publicnode.com --require integrity,authentic,trusted,onchain
+```
+
+Not yet in production: no directory key with `use = stablecoin-receipt` is published, so production receipts of
+this kind do not exist yet (test keys only; see the doc for what is missing).
+
 ## Repository layout
 
 ```
 spec/          TRUST-KERNEL.md — normative specification (threat model, algorithm, domain table, limits)
-kernel/        Trust Kernel v2 — the single reference implementation (+ CLI fractalai-verify, trust-roots.json)
+kernel/        Trust Kernel v2 — the single reference implementation (+ CLI fractalai-verify, trust-roots.json,
+               latam-stablecoins.json)
+issuer/        latam-stablecoin-receipt issuer (library + CLI; operator-supplied ML-DSA-65 key; read-only RPC)
 corpus/        adversarial + positive golden corpus (executable spec; JS and Python runners)
 redteam/       the red-team PoCs replayed against the kernel (run-all.sh)
 verifier/      offline verifiers (ML-DSA-65 seals, MIDAS alerts, EVM + Solana Memo anchor checks) + tests

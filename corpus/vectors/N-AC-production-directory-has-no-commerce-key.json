@@ -1,0 +1,62 @@
+{
+ "id": "N-AC-production-directory-has-no-commerce-key",
+ "title": "Real epoch-3 production directory (pinned roots): no key with use commerce-receipt is published",
+ "source": [],
+ "input": {
+  "receipt": {
+   "algorithm": "ml-dsa-65",
+   "domain": "FRACTALAI-agent-commerce-receipt-v1",
+   "commerce_id": "8fa21d942c62190cb9d77d977976020e23f0ba3cac8d1a21362d20092dd7bf23",
+   "signed_message": "FRACTALAI-agent-commerce-receipt-v1\n8fa21d942c62190cb9d77d977976020e23f0ba3cac8d1a21362d20092dd7bf23",
+   "issued_at": 1791399000,
+   "public_key": "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",
+   "signature": "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",
+   "commerce": {
+    "v": "fractalai.agent-commerce/1",
+    "protocol": "ap2",
+    "profile": "ap2.fulfillment/1",
+    "issued_at": 1791399000,
+    "payment": {
+     "payment_id": "pay_7f3c9a",
+     "psp_confirmation_id": "psp_7f3c9a",
+     "network_confirmation_id": "net_7f3c9a",
+     "order_id": "order_123"
+    },
+    "delivery": {
+     "sha256": "ca02a61faa2821006e2afda2a2be6c625425dc39bcada09ce37dd518d42ec21f",
+     "media_type": "application/json",
+     "size": 24
+    },
+    "bindings": {
+     "payment_receipt_sha256": "fca4eb7e0abc4c448391dd1405ff79a0690c71dbde384975b6fd177a2a3bf72e",
+     "payment_mandate_ref": "q8nX3T0yCw2vB7m0f1sYbq5mJmHn3c1k3QeY1rWwKxA",
+     "checkout_receipt_sha256": "093d531c8507b7797ee5a46a845824425835fb6d9224bcd041b018961dc3e20f",
+     "checkout_mandate_ref": "Zt3o9yXz0bJk2v7mQp1n4r6s8u0w2y4A6C8E0G2I4K8"
+    }
+   }
+  }
+ },
+ "context": {
+  "now": 1791400000,
+  "directory": {
+   "$ref": "fixtures/directory-epoch3.json"
+  },
+  "options": {
+   "kind": "agent-commerce-receipt"
+  }
+ },
+ "expect": {
+  "valid": false,
+  "levels": {
+   "integrity": true,
+   "authentic": true,
+   "trusted": false,
+   "time_anchored": null,
+   "finalized": null
+  },
+  "trust_basis": "pinned-root",
+  "codes": [
+   "KEY_NOT_LISTED"
+  ]
+ }
+}

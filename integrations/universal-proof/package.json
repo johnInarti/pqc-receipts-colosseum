@@ -1,0 +1,31 @@
+{
+  "name": "@fractalai/agent-commerce-receipts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Post-quantum (ML-DSA-65) receipts that bind a payment from any agent-payment protocol (AP2, ERC-8004, MCP, A2A, LatAm instant rails) to the content delivered. Verified by Trust Kernel v2 (spec 2.2, kind agent-commerce-receipt). NOT published.",
+  "type": "module",
+  "engines": { "node": ">=23.6" },
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "setup": "bash scripts/setup-kernel.sh && npm install --no-audit --no-fund",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "fixtures:ap2": "python3 scripts/gen_ap2_fixtures.py",
+    "fixtures:erc8004": "node scripts/copy-erc8004-artifacts.ts",
+    "example:ap2": "node examples/ap2-a2a-fulfillment.ts",
+    "example:mcp": "node examples/mcp-paid-tool.ts",
+    "example:erc8004": "node examples/erc8004-validator.ts"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@fractalai/pqc-trust-kernel": "file:.kernel/kernel",
+    "@noble/hashes": "~2.2.0",
+    "@noble/post-quantum": "~0.6.1",
+    "viem": "^2.57.4"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@types/node": "^24.0.0",
+    "typescript": "~5.9.0"
+  }
+}

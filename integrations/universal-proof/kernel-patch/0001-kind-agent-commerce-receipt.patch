@@ -1,0 +1,708 @@
+From c5dceb971ff84f3d9fb62e2df8b6735db6c7bdba Mon Sep 17 00:00:00 2001
+From: John Edward Romo Sanchez <softnextceo@gmail.com>
+Date: Fri, 9 Oct 2026 12:19:16 -0500
+Subject: [PATCH] =?UTF-8?q?feat(kernel):=20kind=20agent-commerce-receipt?=
+ =?UTF-8?q?=20(spec=202.2=20=C2=A713)=20=E2=80=94=20protocol-neutral=20pay?=
+ =?UTF-8?q?ment=E2=86=94delivery=20binding?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+New kind, own domain FRACTALAI-agent-commerce-receipt-v1 and key use commerce-receipt.
+Closed ASCII-only body (v, protocol, profile, issued_at, payment, bindings, delivery).
+JS kernel + Python port; 44 new corpus vectors (6 positive, 38 negative); both 217/217.
+Production epoch 3 has no commerce-receipt key (asserted by N-AC-production-directory-has-no-commerce-key).
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ README.md                                     |   6 +-
+ corpus/gen.mjs                                |  90 +++++++++++++++
+ corpus/lib/synth.mjs                          |  22 ++++
+ kernel/package.json                           |   2 +-
+ kernel/src/codes.mjs                          |   4 +-
+ kernel/src/commerce.mjs                       | 100 +++++++++++++++++
+ kernel/src/domains.mjs                        |  10 +-
+ kernel/src/index.mjs                          |   1 +
+ kernel/src/kinds.mjs                          |   4 +
+ .../src/fractalai_pqc_verify/kernel/_codes.py |   3 +-
+ .../fractalai_pqc_verify/kernel/_commerce.py  | 104 ++++++++++++++++++
+ .../src/fractalai_pqc_verify/kernel/_model.py |   8 +-
+ spec/TRUST-KERNEL.md                          |  79 ++++++++++++-
+ 13 files changed, 421 insertions(+), 12 deletions(-)
+ create mode 100644 kernel/src/commerce.mjs
+ create mode 100644 python/src/fractalai_pqc_verify/kernel/_commerce.py
+
+diff --git a/README.md b/README.md
+index 9f70057..f96a341 100644
+--- a/README.md
++++ b/README.md
+@@ -30,8 +30,8 @@ subscribers, treasury 99.01 USDC**. One founder (Colombia), no employees, no pri
+ 
+ Every trust decision in this repository is made by **one** implementation, [`kernel/`](kernel/), specified normatively
+ in [`spec/TRUST-KERNEL.md`](spec/TRUST-KERNEL.md) and pinned down by an executable specification,
+-[`corpus/`](corpus/) (173 vectors: every proof of concept from four internal red-teams + real production positives +
+-the LatAm stablecoin receipts below).
++[`corpus/`](corpus/) (217 vectors: every proof of concept from four internal red-teams + real production positives +
++the LatAm stablecoin receipts below + the protocol-neutral `agent-commerce-receipt`, spec §13).
+ `verifier/`, `conformance/` and the Python package delegate to it or reproduce it; both the JavaScript kernel and the
+ Python port pass the corpus at 100 %.
+ 
+@@ -51,7 +51,7 @@ cd kernel && npm install
+ node bin/fractalai-verify.mjs fe62b072c2740e7a8d10cf7e643905b7d79f3f9b19f1c3970fc8754f18d538ee        # VALID, exit 0
+ node bin/fractalai-verify.mjs ../deployments/anchors/PQCReceiptAnchor-5042-fe62b072.json --anchors \
+      --require integrity,authentic,trusted,time_anchored,finalized                                     # + Arc time proof
+-cd ../corpus && npm install && node run.mjs --live                                                   # 173/173 + live 4/4
++cd ../corpus && npm install && node run.mjs --live                                                   # 217/217 + live 4/4
+ ```
+ 
+ The receipt is bound to the id you asked for, the signed message is rebuilt (never read from the receipt), the key
+diff --git a/corpus/gen.mjs b/corpus/gen.mjs
+index f188ba4..c0de1c8 100644
+--- a/corpus/gen.mjs
++++ b/corpus/gen.mjs
+@@ -439,6 +439,96 @@ V('N-RTS-blocktime-before-signed', synSol('blockTime long before the signed emit
+   V('N-SC-quorum-not-met', { title: 'Policy requires 2 RPCs, one configured', input: { receipt: R.copm }, context: ctxS(FX.copm, P137, { policy: { rpcQuorum: 2 } }), expect: { valid: false, levels: LS(true, true, true, false), codes: ['RPC_QUORUM'] } });
+ }
+ 
++// ═══════════════ agent-commerce-receipt (spec §13): protocol-neutral payment ↔ delivery binding ═══════════════
++// Synthetic TEST PKI only (production epoch 3 has no commerce-receipt key — asserted below). Bodies follow the
++// adapter profiles (ap2.fulfillment/1, erc8004.validation/1, mcp.tool-result/1) but the kernel only checks shape,
++// signature, key use/lifecycle and time: the profile semantics are re-derived by the adapters, never here.
++{
++  const KC = S.mlKey('commerce-issuer'), KX = S.mlKey('x402-only'), KSC = S.mlKey('stablecoin-issuer'), KCR = S.mlKey('commerce-reserved');
++  const DC = S.directory([
++    { key: KC, use: 'commerce-receipt', status: 'active', not_before: 1790000000 },
++    { key: KX, use: 'x402-receipt', status: 'active', not_before: 1790000000 },
++    { key: KSC, use: 'stablecoin-receipt', status: 'active', not_before: 1790000000 },
++    { key: KCR, use: 'commerce-receipt', status: 'reserved' },
++  ], GOV, { epoch: 3, prevRoot: sha256hex('commerce-epoch-2') });
++  const TRC = S.testRoots(GOV, DC);
++  const KIND = 'agent-commerce-receipt';
++  const ctxC = (o = {}) => ({ roots: TRC, directory: DC, options: { kind: KIND, ...(o.options || {}) }, ...(o.ctx || {}) });
++  const body = S.commerceBody;
++  const ap2 = S.commerceReceipt(KC);
++  const erc = S.commerceReceipt(KC, body({
++    protocol: 'erc8004', profile: 'erc8004.validation/1',
++    payment: { scheme: 'x402-exact', network: 'eip155:8453', tx_hash: '0x' + '42'.repeat(32) },
++    delivery: { sha256: sha256hex('erc8004 work output') },
++    bindings: { chain_id: 'eip155:31337', validation_registry: '0x' + '8004'.repeat(10), agent_id: '1', request_hash: '0x' + sha256hex('request').slice(0, 64), validator: '0x' + 'f0'.repeat(20) },
++  }));
++  const mcp = S.commerceReceipt(KC, body({ protocol: 'mcp', profile: 'mcp.tool-result/1', payment: { method: 'none' }, delivery: { sha256: sha256hex('{}') }, bindings: {} }));
++  const LC = (i, a, t, o = null) => ({ ...L(i, a, t), onchain: o });
++  const BADI = { valid: false, levels: FAIL_I, codes: ['COMMERCE_MALFORMED'], exit_code: 10 };
++  const raw = (b) => S.commerceReceiptRaw(KC, b);
++
++  // ── positives ──
++  V('P40-commerce-ap2-fulfillment', { title: 'agent-commerce-receipt, profile ap2.fulfillment/1, active commerce-receipt test key, test roots (override)', input: { receipt: ap2 }, context: ctxC(), expect: { valid: true, levels: OK, trust_basis: 'override', exit_code: 0 } });
++  V('P41-commerce-erc8004-validation-trusted-keys', { title: 'profile erc8004.validation/1, pinned key set (no directory)', input: { receipt: erc }, context: { options: { kind: KIND, trusted_keys: [KC.pk] } }, expect: { valid: true, levels: OK, trust_basis: 'override' } });
++  V('P42-commerce-mcp-minimal', { title: 'profile mcp.tool-result/1: one payment entry, empty bindings, delivery with sha256 only', input: { receipt: mcp }, context: ctxC(), expect: { valid: true, levels: OK } });
++  const bare = { commerce: ap2.commerce, public_key: ap2.public_key, signature: ap2.signature };
++  V('P43-commerce-without-unsigned-copies', { title: 'Only commerce + public_key + signature (all unsigned copies optional)', input: { receipt: bare }, context: ctxC(), expect: { valid: true, levels: OK } });
++  V('P44-commerce-expected-id-and-kinds', { title: 'Policy allows several kinds; shape selects agent-commerce-receipt; expected id matches', input: { receipt: ap2 }, context: ctxC({ options: { kind: undefined, kinds: ['x402-seal', KIND], expected_id: ap2.commerce_id } }), expect: { valid: true, levels: OK } });
++  const cIds = S.idsOf(ap2.signature, ap2.signed_message, ap2.public_key);
++  V('P45-commerce-anchored-arbitrum', { title: 'Commerce receipt anchored (synthetic Arbitrum One node with the real runtime code): observedAt = signed issued_at', input: { receipt: ap2 }, context: ctxC({ options: { check_anchors: true, anchors: [synAnchor(600000100)], rpc: { 'eip155:42161': ['replay://synthetic-arb1'] }, policy: { require: ['integrity', 'authentic', 'trusted', 'time_anchored', 'finalized'] } }, ctx: { rpc_transcript: synT({ ids: cIds, observedAt: 1791399000, blockNumber: 600000100, blockTime: 1791399060 }) } }), expect: { valid: true, levels: L(true, true, true, true, true) } });
++
++  // ── A1: document forger ──
++  const altered = clone(ap2); altered.commerce.payment.payment_id = 'pay_attacker';
++  V('N-AC-payment-altered-id-kept', { title: 'payment_id changed in the body, unsigned commerce_id kept', input: { receipt: altered }, context: ctxC(), expect: { valid: false, levels: FAIL_I, codes: ['RECEIPT_ID_MISMATCH'] } });
++  const alteredBare = { commerce: altered.commerce, public_key: ap2.public_key, signature: ap2.signature };
++  V('N-AC-payment-altered-no-copies', { title: 'payment_id changed, no unsigned copies: the genuine signature does not cover the new body', input: { receipt: alteredBare }, context: ctxC(), expect: { valid: false, levels: FAIL_A, codes: ['SIGNATURE_INVALID'], exit_code: 11 } });
++  const swapped = clone(bare); swapped.commerce = { ...swapped.commerce, delivery: { sha256: sha256hex('other content') } };
++  V('N-AC-delivery-swapped', { title: 'Delivered-content hash replaced (claims another content was paid for)', input: { receipt: swapped }, context: ctxC(), expect: { valid: false, levels: FAIL_A, codes: ['SIGNATURE_INVALID'] } });
++  V('N-AC-extra-body-key', { title: 'Body carries an extra key (note) — closed key set', input: { receipt: raw({ ...body(), note: 'x' }) }, context: ctxC(), expect: BADI });
++  const { delivery: _d, ...noDelivery } = body();
++  V('N-AC-missing-delivery', { title: 'Body without delivery (a commerce receipt always binds a delivered content hash)', input: { receipt: raw(noDelivery) }, context: ctxC(), expect: BADI });
++  V('N-AC-delivery-sha-uppercase', { title: 'delivery.sha256 in uppercase hex', input: { receipt: raw(body({ delivery: { sha256: sha256hex('x').toUpperCase() } })) }, context: ctxC(), expect: BADI });
++  V('N-AC-delivery-unknown-key', { title: 'delivery carries an unknown key (url)', input: { receipt: raw(body({ delivery: { sha256: sha256hex('x'), url: 'https://e.x' } })) }, context: ctxC(), expect: BADI });
++  V('N-AC-non-ascii-value', { title: 'payment value with a non-ASCII character (parser/normalisation differential guard)', source: ['spec:§13.2 ASCII-only (A8)'], input: { receipt: raw(body({ payment: { payment_id: 'pagó_1' } })) }, context: ctxC(), expect: BADI });
++  V('N-AC-numeric-payment-value', { title: 'payment.amount as a JSON number (values are strings only)', input: { receipt: raw(body({ payment: { amount: 1999 } })) }, context: ctxC(), expect: BADI });
++  V('N-AC-uppercase-entry-key', { title: 'bindings key with uppercase letters', input: { receipt: raw(body({ bindings: { RequestHash: 'abc' } })) }, context: ctxC(), expect: BADI });
++  V('N-AC-empty-entry-value', { title: 'payment value is the empty string', input: { receipt: raw(body({ payment: { payment_id: '' } })) }, context: ctxC(), expect: BADI });
++  V('N-AC-issued-at-string', { title: 'issued_at as a string', input: { receipt: raw(body({ issued_at: '1791399000' })) }, context: ctxC(), expect: BADI });
++  V('N-AC-issued-at-fraction', { title: 'issued_at with a fraction (1791399000.5)', source: ['spec:§4.3 safe integers'], input: { receipt: raw(body({ issued_at: 1791399000.5 })) }, context: ctxC(), expect: BADI });
++  V('N-AC-issued-at-zero', { title: 'issued_at = 0', input: { receipt: raw(body({ issued_at: 0 })) }, context: ctxC(), expect: BADI });
++  V('N-AC-wrong-version', { title: 'v = fractalai.agent-commerce/2 (unknown body version)', input: { receipt: raw(body({ v: 'fractalai.agent-commerce/2' })) }, context: ctxC(), expect: BADI });
++  V('N-AC-protocol-uppercase', { title: 'protocol = "AP2"', input: { receipt: raw(body({ protocol: 'AP2' })) }, context: ctxC(), expect: BADI });
++  V('N-AC-profile-without-version', { title: 'profile without /<version>', input: { receipt: raw(body({ profile: 'ap2.fulfillment' })) }, context: ctxC(), expect: BADI });
++  const many = Object.fromEntries(Array.from({ length: 17 }, (_, i) => [`k${i}`, 'v']));
++  V('N-AC-17-bindings', { title: 'bindings with 17 entries (max 16)', input: { receipt: raw(body({ bindings: many })) }, context: ctxC(), expect: BADI });
++  const big = (p) => Object.fromEntries(Array.from({ length: 16 }, (_, i) => [`${p}${i}`, 'x'.repeat(512)]));
++  V('N-AC-body-over-8192-bytes', { title: '16 payment + 16 bindings entries of 512 characters: JCS(commerce) > 8192 bytes', input: { receipt: raw(body({ payment: big('p'), bindings: big('b') })) }, context: ctxC(), expect: BADI });
++  V('N-AC-body-not-object', { title: 'commerce is an array', input: { receipt: { commerce: [], public_key: ap2.public_key, signature: ap2.signature } }, context: ctxC(), expect: BADI });
++  V('N-AC-domain-relabelled', { title: 'Unsigned domain relabelled as the stablecoin domain', input: { receipt: { ...ap2, domain: 'FRACTALAI-stablecoin-receipt-v1' } }, context: ctxC(), expect: { valid: false, levels: FAIL_I, codes: ['DOMAIN_MISMATCH'] } });
++  V('N-AC-signed-message-mismatch', { title: 'Unsigned signed_message names another id', input: { receipt: { ...ap2, signed_message: `FRACTALAI-agent-commerce-receipt-v1\n${'0'.repeat(64)}` } }, context: ctxC(), expect: { valid: false, levels: FAIL_I, codes: ['SIGNED_MESSAGE_MISMATCH'] } });
++  V('N-AC-top-level-issued-at-mismatch', { title: 'Top-level issued_at (what a dashboard reads) differs from the signed one', input: { receipt: { ...ap2, issued_at: ap2.issued_at + 3600 } }, context: ctxC(), expect: { valid: false, levels: FAIL_I, codes: ['UNSIGNED_FIELD_MISMATCH'] } });
++  V('N-AC-kind-ambiguous-seal-body', { title: 'Commerce receipt also carrying an x402-seal `body`', input: { receipt: { ...ap2, body: S.sealBody() } }, context: ctxC(), expect: { valid: false, levels: FAIL_I, codes: ['KIND_AMBIGUOUS'] } });
++  V('N-AC-profile-label-other-kind', { title: 'Top-level profile label "x402-served" on a commerce receipt', source: ['redteam-python:F1'], input: { receipt: { ...ap2, profile: 'x402-served' } }, context: ctxC(), expect: { valid: false, levels: FAIL_I, codes: ['KIND_AMBIGUOUS'] } });
++  V('N-AC-kind-not-allowed', { title: 'Policy allows only x402-seal and midas-alert; document is a commerce receipt', input: { receipt: ap2 }, context: ctxC({ options: { kind: undefined, kinds: ['x402-seal', 'midas-alert'] } }), expect: { valid: false, levels: FAIL_I, codes: ['KIND_NOT_ALLOWED'] } });
++  V('N-AC-expected-id-other-genuine', { title: 'A genuine commerce receipt served for another requested id (mirror substitution, A2)', input: { receipt: mcp }, context: ctxC({ options: { expected_id: ap2.commerce_id } }), expect: { valid: false, levels: FAIL_I, codes: ['EXPECTED_ID_MISMATCH'] } });
++
++  // ── domain separation / key use ──
++  const asServed = S.servedProof(KC, 'agent-commerce', ap2.commerce_id);
++  asServed.signature = ap2.signature;
++  V('N-AC-signature-replayed-as-served-proof', { title: 'Commerce signature re-wrapped as a served-proof over the same id (domain separation)', input: { receipt: asServed }, context: { roots: TRC, directory: DC, options: { kind: 'served-proof' } }, expect: { valid: false, levels: FAIL_A, codes: ['SIGNATURE_INVALID'] } });
++  const crossDomain = S.commerceReceipt(KC, body(), { domain: 'FRACTALAI-x402-served-v1\nx402-witness' });
++  V('N-AC-signed-under-seal-domain', { title: 'Commerce body signed under the x402-witness domain, presented as a commerce receipt', input: { receipt: crossDomain }, context: ctxC(), expect: { valid: false, levels: FAIL_A, codes: ['SIGNATURE_INVALID'] } });
++  V('N-AC-x402-key-cannot-sign-commerce', { title: 'Active x402-receipt key signs a commerce receipt', input: { receipt: S.commerceReceipt(KX) }, context: ctxC(), expect: { valid: false, levels: FAIL_T, codes: ['KEY_USE_MISMATCH'], exit_code: 12 } });
++  V('N-AC-stablecoin-key-cannot-sign-commerce', { title: 'Active stablecoin-receipt key signs a commerce receipt', input: { receipt: S.commerceReceipt(KSC) }, context: ctxC(), expect: { valid: false, levels: FAIL_T, codes: ['KEY_USE_MISMATCH'] } });
++  V('N-AC-commerce-key-cannot-sign-x402-seal', { title: 'Active commerce-receipt key signs an x402 seal', input: { receipt: S.sealReceipt(KC, S.sealBody()) }, context: { roots: TRC, directory: DC, options: { kind: 'x402-seal' } }, expect: { valid: false, levels: FAIL_T, codes: ['KEY_USE_MISMATCH'] } });
++  V('N-AC-reserved-commerce-key', { title: 'Reserved (never activated) commerce key', input: { receipt: S.commerceReceipt(KCR) }, context: ctxC(), expect: { valid: false, levels: FAIL_T, codes: ['KEY_STATUS_RESERVED'] } });
++  V('N-AC-key-not-yet-valid', { title: 'Signed issued_at before the key not_before', input: { receipt: S.commerceReceipt(KC, body({ issued_at: 1789999999 })) }, context: ctxC(), expect: { valid: false, levels: FAIL_T, codes: ['KEY_NOT_YET_VALID'] } });
++  V('N-AC-signed-time-in-future', { title: 'issued_at a day after verification time', input: { receipt: S.commerceReceipt(KC, body({ issued_at: NOW + 86400 })) }, context: ctxC(), expect: { valid: false, levels: FAIL_T, codes: ['SIGNED_TIME_IN_FUTURE'] } });
++  V('N-AC-production-directory-has-no-commerce-key', { title: 'Real epoch-3 production directory (pinned roots): no key with use commerce-receipt is published', input: { receipt: ap2 }, context: { directory: REF('fixtures/directory-epoch3.json'), options: { kind: KIND } }, expect: { valid: false, levels: FAIL_T, trust_basis: 'pinned-root', codes: ['KEY_NOT_LISTED'] } });
++  V('N-AC-onchain-not-applicable', { title: 'Policy requires the onchain level: commerce receipts carry no on-chain facts the kernel recomputes', input: { receipt: ap2 }, context: ctxC({ options: { check_onchain: true, policy: { require: ['integrity', 'authentic', 'trusted', 'onchain'] } } }), expect: { valid: false, levels: LC(true, true, true, false), codes: ['ONCHAIN_NOT_APPLICABLE'], exit_code: 15 } });
++  V('N-AC-anchor-observed-at-not-issued-at', { title: 'Anchor event observedAt differs from the signed issued_at', input: { receipt: ap2 }, context: ctxC({ options: { check_anchors: true, anchors: [synAnchor(600000101)], rpc: { 'eip155:42161': ['replay://synthetic-arb1'] }, policy: { require: ['integrity', 'authentic', 'trusted', 'time_anchored'] } }, ctx: { rpc_transcript: synT({ ids: cIds, observedAt: 1791399001, blockNumber: 600000101, blockTime: 1791399060 }) } }), expect: { valid: false, levels: L(true, true, true, false, false), codes: ['ANCHOR_OBSERVED_AT_MISMATCH'] } });
++}
++
+ // ── manifest: id → sha256 of the vector file (the runner refuses a corpus that does not match) ──
+ const files = readdirSync(OUT).filter((f) => f.endsWith('.json')).sort();
+ const manifest = { format: 'fractalai.trust-corpus/1', kernel_spec: '2.0.0', count: files.length, vectors: Object.fromEntries(files.map((f) => [f.replace(/\.json$/, ''), sha256hex(readFileSync(new URL(f, OUT)))])) };
+diff --git a/corpus/lib/synth.mjs b/corpus/lib/synth.mjs
+index ca0b01b..c35da44 100644
+--- a/corpus/lib/synth.mjs
++++ b/corpus/lib/synth.mjs
+@@ -117,3 +117,25 @@ export function solTranscript({ url, tx, wire = tx.wire, slot = 4242, statusSlot
+   ];
+ }
+ export { buildMemo, MEMO_PROGRAM_ID, jcs };
++
++// ── agent-commerce-receipt (spec §13) ──
++export const COMMERCE_DOMAIN = 'FRACTALAI-agent-commerce-receipt-v1';
++export const commerceBody = (o = {}) => ({
++  v: 'fractalai.agent-commerce/1', protocol: 'ap2', profile: 'ap2.fulfillment/1', issued_at: 1791399000,
++  payment: { payment_id: 'pay_7f3c9a', psp_confirmation_id: 'psp_7f3c9a', network_confirmation_id: 'net_7f3c9a', order_id: 'order_123' },
++  delivery: { sha256: sha256hex('corpus delivered content'), media_type: 'application/json', size: 24 },
++  bindings: { payment_receipt_sha256: sha256hex('payment-receipt-jwt'), payment_mandate_ref: 'q8nX3T0yCw2vB7m0f1sYbq5mJmHn3c1k3QeY1rWwKxA', checkout_receipt_sha256: sha256hex('checkout-receipt-jwt'), checkout_mandate_ref: 'Zt3o9yXz0bJk2v7mQp1n4r6s8u0w2y4A6C8E0G2I4K8' },
++  ...o,
++});
++/** Sign a commerce body with `key` under `domain` (overridable to build cross-domain negatives). */
++export function commerceReceipt(key, body = commerceBody(), { domain = COMMERCE_DOMAIN } = {}) {
++  const id = sha256hex(jcsSigned(body));
++  const signed_message = `${domain}\n${id}`;
++  return { algorithm: 'ml-dsa-65', domain: COMMERCE_DOMAIN, commerce_id: id, signed_message: `${COMMERCE_DOMAIN}\n${id}`, issued_at: body.issued_at, public_key: key.pk, signature: key.sign(signed_message), commerce: body };
++}
++/** Raw signer for bodies the strict shape refuses (still signed over plain JCS, so only the shape check rejects them). */
++export function commerceReceiptRaw(key, body) {
++  const id = sha256hex(jcs(body));
++  const signed_message = `${COMMERCE_DOMAIN}\n${id}`;
++  return { algorithm: 'ml-dsa-65', public_key: key.pk, signature: key.sign(signed_message), commerce: body };
++}
+diff --git a/kernel/package.json b/kernel/package.json
+index efd28fb..b0523e1 100644
+--- a/kernel/package.json
++++ b/kernel/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "@fractalai/pqc-trust-kernel",
+-  "version": "2.1.0",
++  "version": "2.2.0",
+   "description": "Trust Kernel v2 \u2014 the single reference implementation of FractalAI's post-quantum (ML-DSA-65 / FIPS 204) receipt verification: pinned trust roots, epoch-chained key directory with anti-rollback, domain\u2194use\u2194route binding, consensus time proofs (EVM + Solana), leveled verdicts. Spec: spec/TRUST-KERNEL.md.",
+   "type": "module",
+   "exports": {
+diff --git a/kernel/src/codes.mjs b/kernel/src/codes.mjs
+index 74ebc4f..412d8df 100644
+--- a/kernel/src/codes.mjs
++++ b/kernel/src/codes.mjs
+@@ -4,7 +4,7 @@
+  * implementation (JS, Python, …) MUST emit the same code for the same failure.
+  */
+ export const KERNEL_ID = 'fractalai-trust-kernel/2';
+-export const SPEC_VERSION = '2.1.0';
++export const SPEC_VERSION = '2.2.0';
+ 
+ /** Ordered verdict levels. Each level implies the ones before it except time_anchored/finalized, which
+  * imply `authentic` (an anchor proves existence of signed bytes, independently of key trust), and
+@@ -77,6 +77,8 @@ export const C = Object.freeze({
+   PAYMENT_PARTY_MISMATCH: 'PAYMENT_PARTY_MISMATCH', PAYMENT_AMOUNT_MISMATCH: 'PAYMENT_AMOUNT_MISMATCH',
+   PAYMENT_TOKEN_METADATA: 'PAYMENT_TOKEN_METADATA', PAYMENT_CONFIRMATIONS: 'PAYMENT_CONFIRMATIONS',
+   PAYMENT_NOT_FINALIZED: 'PAYMENT_NOT_FINALIZED', PAYMENT_RPC_MALFORMED: 'PAYMENT_RPC_MALFORMED',
++  // agent-commerce-receipt (spec §13): integrity
++  COMMERCE_MALFORMED: 'COMMERCE_MALFORMED',
+   INTERNAL: 'INTERNAL',
+ });
+ 
+diff --git a/kernel/src/commerce.mjs b/kernel/src/commerce.mjs
+new file mode 100644
+index 0000000..11b7082
+--- /dev/null
++++ b/kernel/src/commerce.mjs
+@@ -0,0 +1,100 @@
++/**
++ * Kind `agent-commerce-receipt` (spec/TRUST-KERNEL.md §13): a protocol-neutral post-quantum receipt that
++ * BINDS together, under one ML-DSA-65 signature and one signed time,
++ *   - identifiers of a payment produced by some payment protocol (AP2, ERC-8004 job, MCP tool call, PIX…),
++ *   - commitments (hashes) to that protocol's own artifacts (mandates, receipts, validation requests), and
++ *   - the sha256 of the content that was delivered for that payment.
++ *
++ *   signed message = "FRACTALAI-agent-commerce-receipt-v1\n" + sha256hex(JCS(commerce))
++ *   key use        = "commerce-receipt"   (an x402 or stablecoin key can never sign it, and vice versa)
++ *   signed time    = commerce.issued_at  (unix seconds, safe integer)
++ *
++ * The kernel checks the SHAPE of the body (closed key set, ASCII-only bounded values, safe integers) and the
++ * signature/trust of the issuer. It does NOT interpret `payment` or `bindings`: what each key means, and how a
++ * relying party re-derives it from the protocol artifacts, is defined by the `profile` (adapters, outside the
++ * kernel). A verdict therefore says "this issuer key bound these identifiers and this content hash at T",
++ * never "the payment settled" or "the content is correct".
++ */
++import { C, fail } from './codes.mjs';
++import { jcsSigned } from './canon.mjs';
++import { sha256hex, ML_DSA_65_PK_BYTES, ML_DSA_65_SIG_BYTES } from './crypto.mjs';
++import { b64decodeStrict, isHex, isPlainObject, own } from './hygiene.mjs';
++import { COMMERCE_DOMAIN } from './domains.mjs';
++
++export { COMMERCE_DOMAIN };
++export const COMMERCE_VERSION = 'fractalai.agent-commerce/1';
++export const COMMERCE_MAX_BYTES = 8192;
++
++const PROTOCOL_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
++const PROFILE_RE = /^[a-z0-9][a-z0-9.-]{0,63}\/[1-9][0-9]{0,5}$/;
++const ENTRY_KEY_RE = /^[a-z][a-z0-9_]{0,63}$/;
++const ENTRY_VALUE_RE = /^[\x20-\x7e]{1,512}$/;
++const MEDIA_TYPE_RE = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/;
++const BODY_KEYS = ['bindings', 'delivery', 'issued_at', 'payment', 'profile', 'protocol', 'v'];
++const DELIVERY_KEYS = new Set(['sha256', 'media_type', 'size']);
++
++const bad = (detail) => fail(C.COMMERCE_MALFORMED, detail);
++
++function entries(obj, what, max) {
++  if (!isPlainObject(obj)) bad(`${what} is not an object`);
++  const keys = Object.keys(obj);
++  if (keys.length > max) bad(`${what} has more than ${max} entries`);
++  for (const k of keys) {
++    if (!ENTRY_KEY_RE.test(k)) bad(`${what} key ${JSON.stringify(k.slice(0, 40))} does not match ^[a-z][a-z0-9_]{0,63}$`);
++    const val = obj[k];
++    if (typeof val !== 'string' || !ENTRY_VALUE_RE.test(val)) bad(`${what}.${k} must be 1..512 printable ASCII characters`);
++  }
++}
++
++/** Strict shape of the signed body (spec §13.2). Returns the signed time. */
++export function checkCommerceBody(b) {
++  if (!isPlainObject(b)) bad('commerce is not an object');
++  const keys = Object.keys(b).sort();
++  if (keys.length !== BODY_KEYS.length || keys.some((k, i) => k !== BODY_KEYS[i])) bad(`commerce must have exactly the keys ${BODY_KEYS.join(', ')}`);
++  if (b.v !== COMMERCE_VERSION) bad(`commerce.v is not ${COMMERCE_VERSION}`);
++  if (typeof b.protocol !== 'string' || !PROTOCOL_RE.test(b.protocol)) bad('commerce.protocol must match ^[a-z0-9][a-z0-9-]{0,31}$');
++  if (typeof b.profile !== 'string' || !PROFILE_RE.test(b.profile)) bad('commerce.profile must match <name>/<version>');
++  if (!Number.isSafeInteger(b.issued_at) || b.issued_at < 1) bad('commerce.issued_at must be a positive safe integer (unix seconds)');
++  entries(b.payment, 'payment', 16);
++  entries(b.bindings, 'bindings', 16);
++  const d = b.delivery;
++  if (!isPlainObject(d)) bad('delivery is not an object');
++  for (const k of Object.keys(d)) if (!DELIVERY_KEYS.has(k)) bad(`delivery has an unknown key ${JSON.stringify(k.slice(0, 40))}`);
++  if (!isHex(d.sha256, 64)) bad('delivery.sha256 must be 64 lowercase hex');
++  if (own(d, 'media_type') && (typeof d.media_type !== 'string' || !MEDIA_TYPE_RE.test(d.media_type))) bad('delivery.media_type is not a lowercase type/subtype');
++  if (own(d, 'size') && (!Number.isSafeInteger(d.size) || d.size < 0)) bad('delivery.size must be a non-negative safe integer');
++  return b.issued_at;
++}
++
++/** Parse a receipt document of kind agent-commerce-receipt (spec §13.3). */
++export function parseCommerceReceipt(r) {
++  const known = new Set(['commerce', 'commerce_id', 'public_key', 'signature', 'algorithm', 'domain', 'signed_message', 'issued_at', 'profile']);
++  if (own(r, 'algorithm') && r.algorithm !== 'ml-dsa-65') fail(C.ALGORITHM, `algorithm ${JSON.stringify(r.algorithm)} is not ml-dsa-65`);
++  if (!own(r, 'commerce')) fail(C.INPUT_SHAPE, 'agent-commerce-receipt needs a commerce object');
++  const signedTime = checkCommerceBody(r.commerce);
++  const canonical = jcsSigned(r.commerce);
++  if (new TextEncoder().encode(canonical).length > COMMERCE_MAX_BYTES) bad(`JCS(commerce) exceeds ${COMMERCE_MAX_BYTES} bytes`);
++  const id = sha256hex(canonical);
++  const message = `${COMMERCE_DOMAIN}\n${id}`;
++  if (own(r, 'commerce_id') && r.commerce_id !== id) fail(C.RECEIPT_ID_MISMATCH, 'commerce_id != sha256(JCS(commerce))');
++  if (own(r, 'domain') && r.domain !== COMMERCE_DOMAIN) fail(C.DOMAIN_MISMATCH, `domain is not ${COMMERCE_DOMAIN}`);
++  if (own(r, 'signed_message') && r.signed_message !== message) fail(C.SIGNED_MESSAGE_MISMATCH, 'signed_message != reconstructed signed message');
++  if (own(r, 'issued_at') && r.issued_at !== signedTime) fail(C.UNSIGNED_FIELD_MISMATCH, `top-level issued_at ${JSON.stringify(r.issued_at)} != signed issued_at ${signedTime}`);
++  return {
++    kind: 'agent-commerce-receipt', content_id: id, message,
++    pk: b64decodeStrict(r.public_key, ML_DSA_65_PK_BYTES, 'public_key'),
++    sig: b64decodeStrict(r.signature, ML_DSA_65_SIG_BYTES, 'signature'),
++    public_key_b64: r.public_key, signed_time: signedTime,
++    signed: { commerce_id: id, ...r.commerce },
++    ignored: Object.keys(r).filter((k) => !known.has(k) && k !== 'anchor' && k !== 'anchors'),
++  };
++}
++
++/** Issuer helper (no key material here): the exact message an issuer must sign for a body. */
++export function commerceSigningMessage(body) {
++  checkCommerceBody(body);
++  const canonical = jcsSigned(body);
++  if (new TextEncoder().encode(canonical).length > COMMERCE_MAX_BYTES) bad(`JCS(commerce) exceeds ${COMMERCE_MAX_BYTES} bytes`);
++  const id = sha256hex(canonical);
++  return { commerce_id: id, message: `${COMMERCE_DOMAIN}\n${id}` };
++}
+diff --git a/kernel/src/domains.mjs b/kernel/src/domains.mjs
+index 52b9fce..b5c80a2 100644
+--- a/kernel/src/domains.mjs
++++ b/kernel/src/domains.mjs
+@@ -12,8 +12,9 @@ export const MIDAS_CANON_HEADER = 'FRACTALAI-midas-alert-v1';
+ export const SEAL_SCHEMA = 'fractalai.x402-settlement-seal/0.1';
+ 
+ export const STABLECOIN_DOMAIN = 'FRACTALAI-stablecoin-receipt-v1';
++export const COMMERCE_DOMAIN = 'FRACTALAI-agent-commerce-receipt-v1';
+ 
+-export const USE = Object.freeze({ RECEIPT: 'x402-receipt', GOVERNANCE: 'key-directory-governance', STABLECOIN: 'stablecoin-receipt' });
++export const USE = Object.freeze({ RECEIPT: 'x402-receipt', GOVERNANCE: 'key-directory-governance', STABLECOIN: 'stablecoin-receipt', COMMERCE: 'commerce-receipt' });
+ 
+ /** route ids with a dedicated kind — they can never be presented as a generic served proof. */
+ export const RESERVED_ROUTES = Object.freeze({
+@@ -57,5 +58,12 @@ export const KINDS = Object.freeze({
+     message: (id) => `${STABLECOIN_DOMAIN}\n${id}`,
+     uses: [USE.STABLECOIN], trust: 'directory', signed_time: 'transfer_canonical.issued_at', anchorable: true, onchain: true,
+   },
++  // spec §13: protocol-neutral receipt binding a payment reference, protocol artifacts (hashes) and the
++  // delivered content hash. Own domain, own key use; its payment facts are profile-defined (no onchain level).
++  'agent-commerce-receipt': {
++    domain: COMMERCE_DOMAIN,
++    message: (id) => `${COMMERCE_DOMAIN}\n${id}`,
++    uses: [USE.COMMERCE], trust: 'directory', signed_time: 'commerce.issued_at', anchorable: true,
++  },
+ });
+ export const KIND_NAMES = Object.freeze(Object.keys(KINDS));
+diff --git a/kernel/src/index.mjs b/kernel/src/index.mjs
+index 740789e..3ee434a 100644
+--- a/kernel/src/index.mjs
++++ b/kernel/src/index.mjs
+@@ -20,3 +20,4 @@ export {
+   observeTransfer, observeEverywhere, verifyStablecoinPayment, abiDecodeString, abiDecodeUint8,
+ } from './stablecoin.mjs';
+ export { rpcCall } from './rpc.mjs';
++export { COMMERCE_DOMAIN, COMMERCE_VERSION, COMMERCE_MAX_BYTES, checkCommerceBody, parseCommerceReceipt, commerceSigningMessage } from './commerce.mjs';
+diff --git a/kernel/src/kinds.mjs b/kernel/src/kinds.mjs
+index 874dd61..8d4242b 100644
+--- a/kernel/src/kinds.mjs
++++ b/kernel/src/kinds.mjs
+@@ -11,6 +11,7 @@ import { jcs, jcsSigned } from './canon.mjs';
+ import { sha256hex, ML_DSA_65_PK_BYTES, ML_DSA_65_SIG_BYTES } from './crypto.mjs';
+ import { b64decodeStrict, isHex, isPlainObject, own } from './hygiene.mjs';
+ import { parseStablecoinReceipt } from './stablecoin.mjs';
++import { parseCommerceReceipt } from './commerce.mjs';
+ import { KINDS, MIDAS_CANON_HEADER, RESERVED_ROUTES, ROUTE_RE, SEAL_SCHEMA, SELF_ATTEST_DOMAIN, SERVED_PREFIX } from './domains.mjs';
+ 
+ const MAX_CANONICAL = 8192;
+@@ -152,6 +153,7 @@ const MARKERS = {
+   'acp-verdict': ['decision'],
+   'served-proof': ['route_id', 'digest'],
+   'latam-stablecoin-receipt': ['transfer_canonical', 'transfer_id', 'transfer'],
++  'agent-commerce-receipt': ['commerce', 'commerce_id'],
+ };
+ /** Optional `profile` labels used by the conformance vectors; if present they must name the parsed kind. */
+ const PROFILE_ALIAS = { 'served-proof': 'x402-served', 'acp-verdict': 'acp-verdict' };
+@@ -172,6 +174,7 @@ export function checkUnambiguous(r, kind) {
+ export function inferKind(r) {
+   if (!isPlainObject(r)) fail(C.INPUT_SHAPE, 'receipt is not a JSON object');
+   if (own(r, 'transfer_canonical')) return 'latam-stablecoin-receipt';
++  if (own(r, 'commerce')) return 'agent-commerce-receipt';
+   if (own(r, 'canonical')) return 'midas-alert';
+   if (own(r, 'body')) return r.domain === SELF_ATTEST_DOMAIN ? 'self-attest-seal' : 'x402-seal';
+   if (own(r, 'decision')) return 'acp-verdict';
+@@ -186,6 +189,7 @@ const PARSERS = {
+   'acp-verdict': acpVerdict,
+   'served-proof': servedProof,
+   'latam-stablecoin-receipt': parseStablecoinReceipt,
++  'agent-commerce-receipt': parseCommerceReceipt,
+ };
+ 
+ /** @param {object} [ctx]  { tokenRegistry } — kind-specific pinned data (latam-stablecoin-receipt). */
+diff --git a/python/src/fractalai_pqc_verify/kernel/_codes.py b/python/src/fractalai_pqc_verify/kernel/_codes.py
+index dfe60d1..cd6d370 100644
+--- a/python/src/fractalai_pqc_verify/kernel/_codes.py
++++ b/python/src/fractalai_pqc_verify/kernel/_codes.py
+@@ -2,7 +2,7 @@
+ from __future__ import annotations
+ 
+ KERNEL_ID = "fractalai-trust-kernel/2"
+-SPEC_VERSION = "2.1.0"
++SPEC_VERSION = "2.2.0"
+ LEVELS = ("integrity", "authentic", "trusted", "time_anchored", "finalized", "onchain")
+ DEFAULT_REQUIRE = ("integrity", "authentic", "trusted")
+ EXIT = {"VALID": 0, "USAGE": 2, "INPUT": 3, "integrity": 10, "authentic": 11, "trusted": 12, "time_anchored": 13, "finalized": 14, "onchain": 15}
+@@ -124,6 +124,7 @@ class C:
+     PAYMENT_CONFIRMATIONS = "PAYMENT_CONFIRMATIONS"
+     PAYMENT_NOT_FINALIZED = "PAYMENT_NOT_FINALIZED"
+     PAYMENT_RPC_MALFORMED = "PAYMENT_RPC_MALFORMED"
++    COMMERCE_MALFORMED = "COMMERCE_MALFORMED"
+     INTERNAL = "INTERNAL"
+ 
+ 
+diff --git a/python/src/fractalai_pqc_verify/kernel/_commerce.py b/python/src/fractalai_pqc_verify/kernel/_commerce.py
+new file mode 100644
+index 0000000..545d7b0
+--- /dev/null
++++ b/python/src/fractalai_pqc_verify/kernel/_commerce.py
+@@ -0,0 +1,104 @@
++"""Kind ``agent-commerce-receipt`` — Python mirror of kernel/src/commerce.mjs (spec/TRUST-KERNEL.md §13).
++Same closed body shape, same signed message, same reason codes. The kernel never interprets ``payment`` or
++``bindings``: their meaning is defined by the profile (adapters outside the kernel)."""
++from __future__ import annotations
++
++import re
++
++from ..jcs import canonicalize
++from ._codes import C, fail
++from ._crypto import ML_DSA_65_PK_BYTES, ML_DSA_65_SIG_BYTES, sha256hex
++from ._hygiene import b64decode_strict, is_hex, is_safe_int, own
++
++COMMERCE_DOMAIN = "FRACTALAI-agent-commerce-receipt-v1"
++COMMERCE_VERSION = "fractalai.agent-commerce/1"
++COMMERCE_USE = "commerce-receipt"
++COMMERCE_MAX_BYTES = 8192
++MARKERS = ["commerce", "commerce_id"]
++
++_PROTOCOL = re.compile(r"[a-z0-9][a-z0-9-]{0,31}")
++_PROFILE = re.compile(r"[a-z0-9][a-z0-9.-]{0,63}/[1-9][0-9]{0,5}")
++_ENTRY_KEY = re.compile(r"[a-z][a-z0-9_]{0,63}")
++_ENTRY_VALUE = re.compile(r"[\x20-\x7e]{1,512}")
++_MEDIA_TYPE = re.compile(r"[a-z0-9][a-z0-9!#$&^_.+-]{0,63}/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}")
++_BODY_KEYS = sorted(["bindings", "delivery", "issued_at", "payment", "profile", "protocol", "v"])
++_DELIVERY_KEYS = {"sha256", "media_type", "size"}
++
++
++def _bad(detail):
++    fail(C.COMMERCE_MALFORMED, detail)
++
++
++def _entries(obj, what, mx):
++    if not isinstance(obj, dict):
++        _bad(f"{what} is not an object")
++    if len(obj) > mx:
++        _bad(f"{what} has more than {mx} entries")
++    for k, val in obj.items():
++        if not _ENTRY_KEY.fullmatch(k):
++            _bad(f"{what} key {k[:40]!r} does not match ^[a-z][a-z0-9_]{{0,63}}$")
++        if not isinstance(val, str) or not _ENTRY_VALUE.fullmatch(val):
++            _bad(f"{what}.{k} must be 1..512 printable ASCII characters")
++
++
++def check_commerce_body(b) -> int:
++    """Strict shape of the signed body (spec §13.2). Returns the signed time."""
++    if not isinstance(b, dict):
++        _bad("commerce is not an object")
++    if sorted(b.keys()) != _BODY_KEYS:
++        _bad(f"commerce must have exactly the keys {', '.join(_BODY_KEYS)}")
++    if b["v"] != COMMERCE_VERSION:
++        _bad(f"commerce.v is not {COMMERCE_VERSION}")
++    if not isinstance(b["protocol"], str) or not _PROTOCOL.fullmatch(b["protocol"]):
++        _bad("commerce.protocol must match ^[a-z0-9][a-z0-9-]{0,31}$")
++    if not isinstance(b["profile"], str) or not _PROFILE.fullmatch(b["profile"]):
++        _bad("commerce.profile must match <name>/<version>")
++    if not is_safe_int(b["issued_at"]) or b["issued_at"] < 1:
++        _bad("commerce.issued_at must be a positive safe integer (unix seconds)")
++    _entries(b["payment"], "payment", 16)
++    _entries(b["bindings"], "bindings", 16)
++    d = b["delivery"]
++    if not isinstance(d, dict):
++        _bad("delivery is not an object")
++    for k in d:
++        if k not in _DELIVERY_KEYS:
++            _bad(f"delivery has an unknown key {k[:40]!r}")
++    if not is_hex(d.get("sha256"), 64):
++        _bad("delivery.sha256 must be 64 lowercase hex")
++    if "media_type" in d and (not isinstance(d["media_type"], str) or not _MEDIA_TYPE.fullmatch(d["media_type"])):
++        _bad("delivery.media_type is not a lowercase type/subtype")
++    if "size" in d and (not is_safe_int(d["size"]) or d["size"] < 0):
++        _bad("delivery.size must be a non-negative safe integer")
++    return int(b["issued_at"])
++
++
++def parse_commerce_receipt(r, ctx=None):
++    known = {"commerce", "commerce_id", "public_key", "signature", "algorithm", "domain", "signed_message", "issued_at", "profile"}
++    if own(r, "algorithm") and r["algorithm"] != "ml-dsa-65":
++        fail(C.ALGORITHM, f"algorithm {r['algorithm']!r} is not ml-dsa-65")
++    if "commerce" not in r:
++        fail(C.INPUT_SHAPE, "agent-commerce-receipt needs a commerce object")
++    signed_time = check_commerce_body(r["commerce"])
++    # The body holds only ASCII strings and safe integers (checked above), the subset every runtime
++    # canonicalises identically; a float like 5.0 is rendered as 5 by the shared JCS implementation.
++    canonical = canonicalize(r["commerce"])
++    if len(canonical.encode("utf-8")) > COMMERCE_MAX_BYTES:
++        _bad(f"JCS(commerce) exceeds {COMMERCE_MAX_BYTES} bytes")
++    cid = sha256hex(canonical)
++    message = f"{COMMERCE_DOMAIN}\n{cid}"
++    if own(r, "commerce_id") and r["commerce_id"] != cid:
++        fail(C.RECEIPT_ID_MISMATCH, "commerce_id != sha256(JCS(commerce))")
++    if own(r, "domain") and r["domain"] != COMMERCE_DOMAIN:
++        fail(C.DOMAIN_MISMATCH, f"domain is not {COMMERCE_DOMAIN}")
++    if own(r, "signed_message") and r["signed_message"] != message:
++        fail(C.SIGNED_MESSAGE_MISMATCH, "signed_message != reconstructed signed message")
++    if own(r, "issued_at") and (not is_safe_int(r["issued_at"]) or r["issued_at"] != signed_time):
++        fail(C.UNSIGNED_FIELD_MISMATCH, f"top-level issued_at {r['issued_at']!r} != signed issued_at {signed_time}")
++    return {
++        "kind": "agent-commerce-receipt", "content_id": cid, "message": message,
++        "pk": b64decode_strict(r.get("public_key"), ML_DSA_65_PK_BYTES, "public_key"),
++        "sig": b64decode_strict(r.get("signature"), ML_DSA_65_SIG_BYTES, "signature"),
++        "public_key_b64": r.get("public_key"), "signed_time": signed_time,
++        "signed": {"commerce_id": cid, **r["commerce"]},
++        "ignored": [k for k in r if k not in known and k not in ("anchor", "anchors")],
++    }
+diff --git a/python/src/fractalai_pqc_verify/kernel/_model.py b/python/src/fractalai_pqc_verify/kernel/_model.py
+index d3664d4..779b8a3 100644
+--- a/python/src/fractalai_pqc_verify/kernel/_model.py
++++ b/python/src/fractalai_pqc_verify/kernel/_model.py
+@@ -9,6 +9,7 @@ from ..jcs import canonicalize
+ from ._codes import C, KernelError, fail
+ from ._crypto import ML_DSA_65_PK_BYTES, ML_DSA_65_SIG_BYTES, kid_for_key, mldsa_verify, sha256hex
+ from ._stablecoin import MARKERS as _SC_MARKERS, STABLECOIN_DOMAIN, STABLECOIN_USE, parse_stablecoin_receipt
++from ._commerce import MARKERS as _COMMERCE_MARKERS, COMMERCE_DOMAIN, COMMERCE_USE, parse_commerce_receipt
+ from ._hygiene import MAX_SAFE, b64decode_strict, is_hex, is_num, is_safe_int, is_safe_uint, own
+ 
+ SERVED_PREFIX = "FRACTALAI-x402-served-v1"
+@@ -27,6 +28,7 @@ KINDS = {
+     "served-proof": {"domain": SERVED_PREFIX, "uses": [USE_RECEIPT], "trust": "directory"},
+     "self-attest-seal": {"domain": SELF_ATTEST_DOMAIN, "uses": [], "trust": "pinned-set-only"},
+     "latam-stablecoin-receipt": {"domain": STABLECOIN_DOMAIN, "uses": [STABLECOIN_USE], "trust": "directory", "onchain": True},
++    "agent-commerce-receipt": {"domain": COMMERCE_DOMAIN, "uses": [COMMERCE_USE], "trust": "directory"},
+ }
+ 
+ # ── canonicalisation of the SIGNED-JSON subset (safe integers only) ──
+@@ -61,6 +63,7 @@ MARKERS = {
+     "midas-alert": ["canonical", "receipt_id", "served_message", "served_domain", "facts", "snapshot"],
+     "x402-seal": ["body"], "self-attest-seal": ["body"], "acp-verdict": ["decision"], "served-proof": ["route_id", "digest"],
+     "latam-stablecoin-receipt": _SC_MARKERS,
++    "agent-commerce-receipt": _COMMERCE_MARKERS,
+ }
+ PROFILE_ALIAS = {"served-proof": "x402-served", "acp-verdict": "acp-verdict"}
+ 
+@@ -228,7 +231,8 @@ def _served(r):
+ 
+ 
+ PARSERS = {"midas-alert": lambda r, ctx: _midas(r), "x402-seal": lambda r, ctx: _seal_like(r, "x402-seal"), "self-attest-seal": lambda r, ctx: _seal_like(r, "self-attest-seal"),
+-           "acp-verdict": lambda r, ctx: _acp(r), "served-proof": lambda r, ctx: _served(r), "latam-stablecoin-receipt": parse_stablecoin_receipt}
++           "acp-verdict": lambda r, ctx: _acp(r), "served-proof": lambda r, ctx: _served(r), "latam-stablecoin-receipt": parse_stablecoin_receipt,
++           "agent-commerce-receipt": parse_commerce_receipt}
+ 
+ 
+ def infer_kind(r) -> str:
+@@ -236,6 +240,8 @@ def infer_kind(r) -> str:
+         fail(C.INPUT_SHAPE, "receipt is not a JSON object")
+     if "transfer_canonical" in r:
+         return "latam-stablecoin-receipt"
++    if "commerce" in r:
++        return "agent-commerce-receipt"
+     if "canonical" in r:
+         return "midas-alert"
+     if "body" in r:
+diff --git a/spec/TRUST-KERNEL.md b/spec/TRUST-KERNEL.md
+index aef30d0..87dd433 100644
+--- a/spec/TRUST-KERNEL.md
++++ b/spec/TRUST-KERNEL.md
+@@ -2,8 +2,8 @@
+ 
+ | | |
+ |---|---|
+-| Version | **2.1.0** (2026-10-08) — 2.0.0 (2026-10-07) + kind `latam-stablecoin-receipt` and level `onchain` (§12), purely additive |
+-| Status | Draft for review. Reference implementation: `kernel/` (JavaScript). Second implementation: `python/src/fractalai_pqc_verify/kernel/`. Executable specification: `corpus/` (both pass 173/173). |
++| Version | **2.2.0** (2026-10-09) — 2.1.0 (2026-10-08) + kind `agent-commerce-receipt` (§13), purely additive. 2.1.0 = 2.0.0 (2026-10-07) + kind `latam-stablecoin-receipt` and level `onchain` (§12) |
++| Status | Draft for review. Reference implementation: `kernel/` (JavaScript). Second implementation: `python/src/fractalai_pqc_verify/kernel/`. Executable specification: `corpus/` (both pass 217/217). |
+ | Supersedes | the per-module trust logic of `verifier/` and `conformance/` ≤ 0.3 (they now delegate here) |
+ | Keywords | MUST, MUST NOT, SHOULD, MAY as in RFC 2119 / RFC 8174 |
+ 
+@@ -74,7 +74,7 @@ This is the subset every runtime canonicalises identically.
+ verdict. Anchor references are hints (§7) and are never part of the projection.
+ 
+ 4.5 A document that carries the distinctive fields of two kinds (`canonical`/`receipt_id`/`served_message`/
+-`facts`/`snapshot` vs `body` vs `decision` vs `route_id`/`digest` vs `transfer_canonical`/`transfer_id`/`transfer`), or whose optional `profile` label does not
++`facts`/`snapshot` vs `body` vs `decision` vs `route_id`/`digest` vs `transfer_canonical`/`transfer_id`/`transfer` vs `commerce`/`commerce_id`), or whose optional `profile` label does not
+ name the verified kind, MUST be refused (`KIND_AMBIGUOUS`).
+ 
+ ## 5. Domain table (normative)
+@@ -87,6 +87,7 @@ name the verified kind, MUST be refused (`KIND_AMBIGUOUS`).
+ | `served-proof` | `FRACTALAI-x402-served-v1\n<route>\n<digest>`, route ∉ {midas-alert, x402-witness, x402-attest-decision}, route `^[a-z0-9][a-z0-9-]{0,63}$`, digest 64 lowercase hex | `x402-receipt` | directory | — |
+ | `self-attest-seal` | `FRACTALAI-x402-self-attest-v1\n` + sha256hex(JCS(body)) | none | explicit pinned key set only | `body.sealed_at` |
+ | `latam-stablecoin-receipt` (§12) | `FRACTALAI-stablecoin-receipt-v1\n` + sha256hex(transfer_canonical) | `stablecoin-receipt` | directory | canonical `issued_at=` |
++| `agent-commerce-receipt` (§13) | `FRACTALAI-agent-commerce-receipt-v1\n` + sha256hex(JCS(commerce)) | `commerce-receipt` | directory | `commerce.issued_at` |
+ | key directory | `FRACTALAI-key-directory-v1\n` + root | governance key (never listed as a receipt key) | trust roots | — |
+ 
+ MIDAS canonical: first line `FRACTALAI-midas-alert-v1`, then `key=value` lines, keys `^[a-z][a-z0-9_]{0,63}$`,
+@@ -95,7 +96,7 @@ debt_usd risk_tier observed_at source snapshot_hash emitted_at` present, `emitte
+ `sealed_at`: `YYYY-MM-DDTHH:MM:SS(.sss)?Z`, a real calendar time; `T_s` = floor(seconds).
+ 
+ Domain separation: the first line of every signed message (`FRACTALAI-x402-served-v1`, `FRACTALAI-x402-self-attest-v1`,
+-`FRACTALAI-stablecoin-receipt-v1`, `FRACTALAI-key-directory-v1`) is distinct, and a key's directory `use` authorizes
++`FRACTALAI-stablecoin-receipt-v1`, `FRACTALAI-agent-commerce-receipt-v1`, `FRACTALAI-key-directory-v1`) is distinct, and a key's directory `use` authorizes
+ exactly the kinds listed above, so a signature for one product can never be presented as another.
+ 
+ ## 6. Key directory
+@@ -375,6 +376,75 @@ The level is evaluated after `authentic` and before `trusted`, and it does not d
+ - Production trust requires a directory key with `use = stablecoin-receipt`; the published epoch 3 has none (corpus
+   `N-SC-production-directory-has-no-stablecoin-key`).
+ 
++## 13. Kind `agent-commerce-receipt` (spec 2.2)
++
++A protocol-neutral post-quantum receipt that **binds**, under one ML-DSA-65 signature and one signed time: identifiers
++of a payment produced by some payment protocol (AP2, an ERC-8004 job, an MCP tool call paid with x402, a PIX/SPEI
++transfer…), commitments (hashes) to that protocol's own artifacts (mandates, receipts, validation requests), and the
++sha256 of the content delivered for that payment. It is the generic form of what `x402-seal` does for x402.
++
++A verdict on this kind states only that **the issuer's key bound these identifiers and this content hash at
++`issued_at`**. It does not state that the payment settled, that the identifiers are genuine, that the content is
++correct, or who the parties are. Those statements belong to the **profile** (§13.4), whose rules a relying party
++applies to the protocol artifacts it holds; the kernel never interprets `payment` or `bindings`.
++
++### 13.1 Signed message and key use
++
++`FRACTALAI-agent-commerce-receipt-v1\n` + sha256hex(JCS(`commerce`)) (UTF-8, empty context). Key `use` MUST be
++`commerce-receipt`; a key with that use authorizes no other kind, and no other use authorizes this kind (§5). The
++signed time `T_s` is `commerce.issued_at`. The kind is anchorable (§7, `observedAt` = `issued_at`). It has no
++`onchain` level (`ONCHAIN_NOT_APPLICABLE`).
++
++### 13.2 The signed body `commerce` (closed shape)
++
++A JSON object with **exactly** these seven keys (any other key, or a missing one, is `COMMERCE_MALFORMED`):
++
++| key | value |
++|---|---|
++| `v` | the string `fractalai.agent-commerce/1` |
++| `protocol` | string `^[a-z0-9][a-z0-9-]{0,31}$` (e.g. `ap2`, `erc8004`, `mcp`, `a2a`, `pix`, `spei`, `bre-b`) |
++| `profile` | string `^[a-z0-9][a-z0-9.-]{0,63}/[1-9][0-9]{0,5}$` (e.g. `ap2.fulfillment/1`) — names the rules of §13.4 |
++| `issued_at` | safe integer ≥ 1 (unix seconds) — the signed time |
++| `payment` | object, 0–16 entries; key `^[a-z][a-z0-9_]{0,63}$`; value a **string** of 1–512 characters in U+0020…U+007E |
++| `bindings` | object, 0–16 entries, same key and value rules as `payment` |
++| `delivery` | object with `sha256` (64 lowercase hex, REQUIRED), optional `media_type` (`^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$`), optional `size` (safe integer ≥ 0); no other key |
++
++Every string is printable ASCII and every number a safe integer, so JCS(`commerce`) is identical in every runtime
++(A8: no Unicode normalisation, no surrogates, no floating point). UTF-8 length of JCS(`commerce`) ≤ 8192 bytes.
++Patterns are full matches (a trailing newline does not match).
++
++### 13.3 The document
++
++`{ commerce, public_key, signature }` plus optional unsigned copies, each of which MUST equal the signed content
++(§4.2): `algorithm` = `ml-dsa-65` (`ALGORITHM`); `domain` = `FRACTALAI-agent-commerce-receipt-v1` (`DOMAIN_MISMATCH`);
++`commerce_id` = sha256hex(JCS(`commerce`)) (`RECEIPT_ID_MISMATCH`); `signed_message` = the rebuilt message
++(`SIGNED_MESSAGE_MISMATCH`); top-level `issued_at` = the signed value as a JSON number (`UNSIGNED_FIELD_MISMATCH`);
++`profile`, if present, MUST be `agent-commerce-receipt` (`KIND_AMBIGUOUS`). Distinctive fields for §4.5: `commerce`,
++`commerce_id`. Content id (`expectedId`) = `commerce_id`. Signed projection: `{ commerce_id, …commerce }`.
++
++### 13.4 Profiles (informative here; normative in each adapter)
++
++A profile fixes, for one protocol, which `payment` and `bindings` keys MUST be present and how a relying party
++re-derives each one from the protocol artifacts. Relying parties MUST apply the profile **after** a kernel verdict
++with `valid = true`, and MUST treat an unknown profile as "binding not checked". Reference profiles (adapters in the
++FractalAI monorepo, `integrations/universal-proof/`):
++
++| profile | binds | re-derivation by the relying party |
++|---|---|---|
++| `ap2.fulfillment/1` | AP2 v0.2 Payment/Checkout Receipt JWTs, their `reference` (closed-mandate hashes), `payment_id`, `psp_confirmation_id`, `network_confirmation_id`, `order_id`, delivered content | sha256 of each receipt JWT (compact, ASCII); ES256 verification of each receipt with the issuer's key; `reference` = base64url(sha256(closed mandate SD-JWT)); `status = Success` |
++| `erc8004.validation/1` | chain (CAIP-2), Validation Registry, Identity Registry, `agentId`, `requestHash`, validator address; the validated work output | `getValidationStatus(requestHash)` on the registry returns that validator and agent and `responseHash = keccak256(receipt bytes)`; keccak256(request payload) = `requestHash` |
++| `mcp.tool-result/1` | tool name, sha256(JCS(arguments)), sha256(JCS(structuredContent ∥ content)), optional sha256(JCS(`x402/payment-response`)) | recomputed from the `CallToolResult` that carries the receipt in `_meta["ai.fractalai/receipt"]` |
++
++### 13.5 Limits (honest)
++
++- The kernel cannot tell a genuine `payment_id` from an invented one; only the profile check against the protocol's
++  own signed artifact (an AP2 ES256 receipt, an ERC-8004 registry entry, a CEP) can. A receipt whose profile was not
++  checked proves the binding claimed by the issuer, nothing more.
++- Production trust requires a directory key with `use = commerce-receipt`; the published epoch 3 has none (corpus
++  `N-AC-production-directory-has-no-commerce-key`).
++- The protocol artifacts themselves remain classically signed (ES256, secp256k1, Ed25519); the post-quantum property
++  covers the binding receipt only.
++
+ ## Appendix A — reason codes
+ 
+ See `kernel/src/codes.mjs` (normative list; the Python port's `_codes.py` is generated from it).
+@@ -398,6 +468,7 @@ See `kernel/src/codes.mjs` (normative list; the Python port's `_codes.py` is gen
+ | anchor RT-S1/S1b/S1c/S2/S3/S4/S5/S7 | §7.3 | `N-RTS*` |
+ | action RT-5/8/13 | §9 step 5 / step 2 / §6.3 | `N-RTA5-*`, `N-RTA8-*`, `N-RTA13-*` |
+ | python F1/F1b: profile field re-routes verification | §4.5, kind fixed by policy | `N-PYF1*`, `N-PYF1b-*`, `N-kind-*` |
++| spec 2.2 design review: commerce body shape, cross-domain replay, key use | §13.2, §13.1, §5 | `N-AC-*`, `P40`–`P45` |
+ | python F2: snapshot / extra facts / emitted_at | §4.2 | `N-PYF2a–d-*` |
+ | python F3/F4/F7/F11, N2 | §8.1, §8.2, §6.1, strict types | `N-PYF4-*`, `N-PYF7-*`, `N-RTE10c-*`, `N-PYN2-*`, `N-PYF11-*` |
+ | python F8/F8b | §6.3 signed time; malformed lifecycle invalid | `N-PYF8b-*`, `N-PYF2d-*` |
+-- 
+2.50.1 (Apple Git-155)
+

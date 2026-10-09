@@ -16,6 +16,7 @@ the live endpoints listed below.
 | Rust Layer-1 node, public JSON-RPC, chain id 62124, consensus signed with **ML-DSA-65 (FIPS 204, NIST level 3)** | `POST https://api.fractalai.net.co` → `eth_blockNumber` ≈ 1,067,718; `fractal_checkpointBundle` → `"algorithm":"ML-DSA-65 (FIPS-204)"`. **One validator, `net_peerCount` = 0.** |
 | Chain registered upstream | https://github.com/ethereum-lists/chains/pull/8769 (merged) |
 | **10 pay-per-call x402 endpoints** on Base (USDC, $0.005–$0.50) returning ML-DSA-65-signed receipts | https://fractalai.net.co/.well-known/x402.json (snapshot in `docs/x402-catalog-snapshot-2026-10-02.json`) |
+| **Pay in Colombian pesos (COPM, Minteo) on Polygon** via x402 `exact` + Permit2, priced from the official TRM; the notary (`/api/x402/witness`) offers USDC/Base and COPM/Polygon side by side | `POST https://fractalai.net.co/api/x402/witness` → 402 lists `eip155:137` / COPM / `permit2`. Live since 2026-10-09; acceptance payments were internal (self-funded), not customer revenue |
 | **Signed, epoch-chained, append-only key directory** (epoch 3; one rotation exercised in production) | https://fractalai.net.co/.well-known/x402-receipt-keys |
 | Receipts reconstructible on-chain (`settle_block_number`, `settle_tx_index`, `settle_log_index`) | 7/7 routes verified on Base, GitHub Actions run 36284837150 |
 | **MIDAS** signed liquidation-risk alerts (Aave V3, 6 chains, 10,315 tracked addresses, paper mode) | https://fractalai.net.co/api/midas/alerts/recent · browser verifier https://fractalai.net.co/midas/proof |

@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 /**
  * fractalai-verify — Trust Kernel v2 CLI. Exit code = first REQUIRED level that failed:
- *   0 valid · 10 integrity · 11 authentic · 12 trusted · 13 time_anchored · 14 finalized · 2 usage · 3 input/network
+ *   0 valid · 10 integrity · 11 authentic · 12 trusted · 13 time_anchored · 14 finalized · 15 onchain · 2 usage · 3 input/network
  *
  *   fractalai-verify <receipt.json | 64-hex receipt id | https URL> [options]
- *     --kind K                 expected kind (default midas-alert; repeatable: x402-seal, served-proof, acp-verdict, self-attest-seal)
+ *     --kind K                 expected kind (default midas-alert; repeatable: x402-seal, served-proof, acp-verdict, self-attest-seal,
+ *                              latam-stablecoin-receipt)
+ *     --onchain                recompute the payment facts from the chain (latam-stablecoin-receipt; level `onchain`)
+ *     --allow-unfinalized-payment   accept a payment block that is confirmed but not yet finalized
+ *     --token-registry FILE    OVERRIDE of the pinned stablecoin registry (reported in `overrides`)
  *     --directory URL|FILE     key directory (default: the public FractalAI directory, verified against the PINNED roots)
  *     --history FILE           an intermediate directory epoch (repeatable) for epoch-chain verification
  *     --anchors                verify time anchors (receipt.anchor / receipt.anchors, or --anchor-ref FILE)
@@ -28,7 +32,7 @@ const args = process.argv.slice(2);
 const multi = (n) => args.flatMap((a, i) => (a === n && i + 1 < args.length ? [args[i + 1]] : []));
 const one = (n) => { const m = multi(n); return m.length ? m[m.length - 1] : undefined; };
 const flag = (n) => args.includes(n);
-const VALUED = new Set(['--kind', '--directory', '--history', '--anchor-ref', '--rpc', '--require', '--min-confirmations', '--quorum', '--now', '--trusted-key', '--governance-key']);
+const VALUED = new Set(['--token-registry', '--kind', '--directory', '--history', '--anchor-ref', '--rpc', '--require', '--min-confirmations', '--quorum', '--now', '--trusted-key', '--governance-key']);
 const positional = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && VALUED.has(args[i - 1])));
 
 function usage(msg) {
@@ -75,6 +79,9 @@ async function main() {
   if (one('--governance-key')) opts.governanceKey = one('--governance-key');
   if (flag('--allow-tls-directory')) opts.allowTlsDirectory = true;
   if (flag('--anchors')) opts.checkAnchors = true;
+  if (flag('--onchain')) opts.checkOnchain = true;
+  if (flag('--allow-unfinalized-payment')) opts.policy.allowUnfinalizedPayment = true;
+  if (one('--token-registry')) opts.tokenRegistry = readText(one('--token-registry'));
   if (one('--anchor-ref')) opts.anchors = readText(one('--anchor-ref'));
   else if (recordAnchor) opts.anchors = recordAnchor;
   const rpc = {};
@@ -93,9 +100,10 @@ async function main() {
     const L = v.levels;
     const fmt = (x) => (x === true ? 'yes' : x === false ? 'NO' : '-');
     process.stdout.write(`${v.valid ? 'VALID' : 'INVALID'}  kind=${oneLine(v.kind ?? '?')}  trust_basis=${v.trust_basis}\n`);
-    process.stdout.write(`  integrity=${fmt(L.integrity)} authentic=${fmt(L.authentic)} trusted=${fmt(L.trusted)} time_anchored=${fmt(L.time_anchored)} finalized=${fmt(L.finalized)}\n`);
+    process.stdout.write(`  integrity=${fmt(L.integrity)} authentic=${fmt(L.authentic)} trusted=${fmt(L.trusted)} time_anchored=${fmt(L.time_anchored)} finalized=${fmt(L.finalized)} onchain=${fmt(L.onchain)}\n`);
     if (v.key) process.stdout.write(`  key kid=${oneLine(v.key.kid)} status=${oneLine(v.key.status ?? '-')} evaluated_at=${oneLine(v.key.evaluated_at ?? '-')} (${oneLine(v.key.time_basis ?? '-')})\n`);
     if (v.directory) process.stdout.write(`  directory epoch=${v.directory.epoch} root=${oneLine(v.directory.root)}\n`);
+    if (v.onchain) process.stdout.write(`  onchain chain=${v.onchain.chain_id} ${oneLine(v.onchain.symbol)} ${oneLine(v.onchain.amount)} ${oneLine(v.onchain.from)} -> ${oneLine(v.onchain.to)} block=${v.onchain.block_number} conf=${v.onchain.confirmations} finalized=${v.onchain.finalized} rpc=${v.onchain.rpc_count}\n`);
     for (const a of v.anchors) process.stdout.write(`  anchor ${oneLine(a.ref)}: ${a.counts ? 'OK' : 'refused'}${a.facts ? ` time=${a.facts.time} finalized=${a.facts.finalized} class=${a.facts.network_class}` : ''}\n`);
     if (v.overrides.length) process.stdout.write(`  overrides: ${oneLine(v.overrides.join(', '))}\n`);
     for (const r of v.reasons) process.stdout.write(`  [${r.level}] ${r.code}: ${oneLine(r.detail, 300)}\n`);

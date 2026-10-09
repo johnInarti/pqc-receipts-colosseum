@@ -1,0 +1,43 @@
+{
+ "id": "N-SC-midas-alert-cannot-claim-onchain",
+ "title": "A genuine MIDAS alert under a policy that requires the onchain level",
+ "source": [],
+ "input": {
+  "receipt": {
+   "$ref": "fixtures/midas-fe62b072.json"
+  }
+ },
+ "context": {
+  "now": 1791400000,
+  "options": {
+   "kind": "midas-alert",
+   "check_onchain": true,
+   "policy": {
+    "require": [
+     "integrity",
+     "authentic",
+     "trusted",
+     "onchain"
+    ]
+   }
+  },
+  "directory": {
+   "$ref": "fixtures/directory-epoch3.json"
+  }
+ },
+ "expect": {
+  "valid": false,
+  "levels": {
+   "integrity": true,
+   "authentic": true,
+   "trusted": true,
+   "time_anchored": null,
+   "finalized": null,
+   "onchain": false
+  },
+  "codes": [
+   "ONCHAIN_NOT_APPLICABLE"
+  ],
+  "exit_code": 15
+ }
+}

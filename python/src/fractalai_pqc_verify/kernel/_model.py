@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from ..jcs import canonicalize
 from ._codes import C, KernelError, fail
 from ._crypto import ML_DSA_65_PK_BYTES, ML_DSA_65_SIG_BYTES, kid_for_key, mldsa_verify, sha256hex
+from ._stablecoin import MARKERS as _SC_MARKERS, STABLECOIN_DOMAIN, STABLECOIN_USE, parse_stablecoin_receipt
 from ._hygiene import MAX_SAFE, b64decode_strict, is_hex, is_num, is_safe_int, is_safe_uint, own
 
 SERVED_PREFIX = "FRACTALAI-x402-served-v1"
@@ -25,6 +26,7 @@ KINDS = {
     "acp-verdict": {"domain": f"{SERVED_PREFIX}\nx402-attest-decision", "uses": [USE_RECEIPT], "trust": "directory"},
     "served-proof": {"domain": SERVED_PREFIX, "uses": [USE_RECEIPT], "trust": "directory"},
     "self-attest-seal": {"domain": SELF_ATTEST_DOMAIN, "uses": [], "trust": "pinned-set-only"},
+    "latam-stablecoin-receipt": {"domain": STABLECOIN_DOMAIN, "uses": [STABLECOIN_USE], "trust": "directory", "onchain": True},
 }
 
 # ── canonicalisation of the SIGNED-JSON subset (safe integers only) ──
@@ -58,6 +60,7 @@ ALWAYS_IGNORED = {"anchor", "anchors"}
 MARKERS = {
     "midas-alert": ["canonical", "receipt_id", "served_message", "served_domain", "facts", "snapshot"],
     "x402-seal": ["body"], "self-attest-seal": ["body"], "acp-verdict": ["decision"], "served-proof": ["route_id", "digest"],
+    "latam-stablecoin-receipt": _SC_MARKERS,
 }
 PROFILE_ALIAS = {"served-proof": "x402-served", "acp-verdict": "acp-verdict"}
 
@@ -224,12 +227,15 @@ def _served(r):
             "signed": {"route_id": route, "digest": r["digest"]}, "ignored": [k for k in r if k not in known]}
 
 
-PARSERS = {"midas-alert": _midas, "x402-seal": lambda r: _seal_like(r, "x402-seal"), "self-attest-seal": lambda r: _seal_like(r, "self-attest-seal"), "acp-verdict": _acp, "served-proof": _served}
+PARSERS = {"midas-alert": lambda r, ctx: _midas(r), "x402-seal": lambda r, ctx: _seal_like(r, "x402-seal"), "self-attest-seal": lambda r, ctx: _seal_like(r, "self-attest-seal"),
+           "acp-verdict": lambda r, ctx: _acp(r), "served-proof": lambda r, ctx: _served(r), "latam-stablecoin-receipt": parse_stablecoin_receipt}
 
 
 def infer_kind(r) -> str:
     if not isinstance(r, dict):
         fail(C.INPUT_SHAPE, "receipt is not a JSON object")
+    if "transfer_canonical" in r:
+        return "latam-stablecoin-receipt"
     if "canonical" in r:
         return "midas-alert"
     if "body" in r:
@@ -251,14 +257,14 @@ def check_unambiguous(r, kind):
         fail(C.KIND_AMBIGUOUS, f"profile does not name kind {kind}")
 
 
-def parse_receipt(r, kind=None):
+def parse_receipt(r, kind=None, ctx=None):
     if not isinstance(r, dict):
         fail(C.INPUT_SHAPE, "receipt is not a JSON object")
     kind = kind or infer_kind(r)
     if kind not in PARSERS:
         fail(C.KIND_UNKNOWN, f"unknown kind {kind!r}")
     check_unambiguous(r, kind)
-    return PARSERS[kind](r)
+    return PARSERS[kind](r, ctx or {})
 
 
 def anchor_ids(p) -> dict:

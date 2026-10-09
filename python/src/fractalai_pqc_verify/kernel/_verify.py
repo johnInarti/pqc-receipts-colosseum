@@ -12,6 +12,7 @@ from ._anchors import default_transport, verify_evm_anchor, verify_solana_anchor
 from ._codes import DEFAULT_REQUIRE, EXIT, KERNEL_ID, LEVELS, SPEC_VERSION, C, KernelError
 from ._crypto import kid_for_key, mldsa_verify
 from ._hygiene import assert_json_value, is_safe_int, parse_json_strict
+from ._stablecoin import registry_lookup, verify_stablecoin_payment
 from ._model import KINDS, anchor_ids, infer_kind, key_authorizes, parse_receipt, verify_directory_chain
 
 
@@ -64,16 +65,17 @@ def _policy(p):
         req.insert(0, "integrity")
     num = lambda k, d, lo: p[k] if is_safe_int(p.get(k)) and p[k] >= lo else d  # noqa: E731
     return {"require": req, "allow_testnet_anchors": p.get("allow_testnet_anchors") is True, "require_known_anchorer": p.get("require_known_anchorer") is True,
-            "min_confirmations": num("min_confirmations", 1, 0), "rpc_quorum": num("rpc_quorum", 1, 1), "skew": num("max_clock_skew_sec", 900, 0)}
+            "min_confirmations": num("min_confirmations", 1, 0), "rpc_quorum": num("rpc_quorum", 1, 1), "skew": num("max_clock_skew_sec", 900, 0),
+            "allow_unfinalized_payment": p.get("allow_unfinalized_payment") is True}
 
 
 def verify(receipt, *, kind=None, kinds=None, expected_id=None, directory=None, directory_history=None, trusted_keys=None,
            governance_key=None, roots=None, checkpoint=None, allow_tls_directory=False, check_anchors=False, anchors=None, rpc=None,
-           solana_signers=None, policy=None, now=None, transport=None) -> dict:
+           solana_signers=None, policy=None, now=None, transport=None, check_onchain=False, token_registry=None) -> dict:
     v = {"kernel": KERNEL_ID, "spec_version": SPEC_VERSION, "kind": None, "valid": False,
-         "levels": {"integrity": False, "authentic": False, "trusted": False, "time_anchored": None, "finalized": None},
+         "levels": {"integrity": False, "authentic": False, "trusted": False, "time_anchored": None, "finalized": None, "onchain": None},
          "trust_basis": "none", "policy": None, "key": None, "directory": None, "signed": None, "signed_time": None,
-         "anchors": [], "overrides": [], "ignored_unsigned_fields": [], "reasons": [], "exit_code": EXIT["integrity"],
+         "anchors": [], "onchain": None, "overrides": [], "ignored_unsigned_fields": [], "reasons": [], "exit_code": EXIT["integrity"],
          "engine": {"self_test_ok": SELF_TEST["ok"], "native_json_key_cache_ok": True}}
 
     def reason(level, e):
@@ -96,7 +98,11 @@ def verify(receipt, *, kind=None, kinds=None, expected_id=None, directory=None, 
         now = now if is_safe_int(now) else int(time.time())
         transport = transport or default_transport
         # 1. integrity
+        reg = None
         try:
+            if token_registry is not None:
+                reg = _value(token_registry)
+                v["overrides"].append("tokenRegistry")
             r = _value(receipt)
             if not isinstance(r, dict):
                 raise KernelError(C.INPUT_SHAPE, "receipt is not a JSON object")
@@ -110,7 +116,7 @@ def verify(receipt, *, kind=None, kinds=None, expected_id=None, directory=None, 
             if k not in allowed:
                 raise KernelError(C.KIND_NOT_ALLOWED, f"receipt looks like {k}, policy allows {', '.join(allowed)}")
             v["kind"] = k
-            p = parse_receipt(r, k)
+            p = parse_receipt(r, k, {"token_registry": reg})
             if expected_id is not None and expected_id != p["content_id"]:
                 raise KernelError(C.EXPECTED_ID_MISMATCH, "the receipt is not the one that was requested (content id differs)")
             v["levels"]["integrity"] = True
@@ -126,6 +132,19 @@ def verify(receipt, *, kind=None, kinds=None, expected_id=None, directory=None, 
         v["levels"]["authentic"] = True
         v["signed"] = p["signed"]
         v["key"] = {"kid": kid_for_key(p["public_key_b64"])}
+        # 2b. on-chain facts (spec §12.4)
+        if check_onchain is True or "onchain" in pol["require"]:
+            v["levels"]["onchain"] = False
+            if not KINDS[p["kind"]].get("onchain"):
+                reason("onchain", KernelError(C.ONCHAIN_NOT_APPLICABLE, f"kind {p['kind']} carries no on-chain facts"))
+            else:
+                try:
+                    facts = verify_stablecoin_payment(p["signed"], {"rpc_urls": (rpc or {}).get(f"eip155:{p['signed']['chain_id']}"), "policy": pol,
+                                                                    "transport": transport, "lookup": registry_lookup(reg)})
+                    v["levels"]["onchain"] = True
+                    v["onchain"] = facts
+                except Exception as e:  # noqa: BLE001
+                    reason("onchain", e)
         # 3. anchors
         want = check_anchors is True or "time_anchored" in pol["require"] or "finalized" in pol["require"]
         anchor_time = None

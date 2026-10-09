@@ -1,0 +1,20 @@
+{
+  "format": "fractalai.stablecoin-registry/1",
+  "id": "fractalai.latam-stablecoins/1",
+  "pinned_at": "2026-10-08T00:00:00Z",
+  "provenance": "Addresses from the 2026-10-07 census of Latin-American fiat stablecoins (issuer docs where available). Each entry re-verified on 2026-10-08 with eth_chainId + eth_call symbol()/name()/decimals() against TWO independent public RPCs per chain (Polygon: polygon-bor-rpc.publicnode.com + 1rpc.io/matic; Base: mainnet.base.org + base-rpc.publicnode.com; Arbitrum One: arb1.arbitrum.io/rpc + arbitrum-one-rpc.publicnode.com); both RPCs returned identical answers. Being on this list means 'this exact contract on this exact chain is the token FractalAI issues receipts for' — it is NOT an endorsement of the issuer, its reserves or its regulatory status. Most tokens are upgradeable proxies: symbol()/decimals() are re-read on-chain at issuance and at verification and must still match.",
+  "chains": {
+    "137": { "name": "Polygon PoS", "default_rpc": "https://polygon-bor-rpc.publicnode.com" },
+    "8453": { "name": "Base", "default_rpc": "https://mainnet.base.org" },
+    "42161": { "name": "Arbitrum One", "default_rpc": "https://arb1.arbitrum.io/rpc" }
+  },
+  "tokens": [
+    { "chain_id": 137, "address": "0x12050c705152931cfee3dd56c52fb09dea816c23", "symbol": "COPM", "decimals": 18, "name": "COP Minteo", "currency": "COP", "issuer": "Minteo (Colombia)", "address_source": "issuer: transparency.minteo.com/contract-directory" },
+    { "chain_id": 137, "address": "0xe6a537a407488807f0bbeb0038b79004f19dddfb", "symbol": "BRLA", "decimals": 18, "name": "BRLA Token", "currency": "BRL", "issuer": "AVENIA (CNPJ 50.224.164/0001-70)", "address_source": "explorer/CoinGecko (issuer confirms the network, not the address)" },
+    { "chain_id": 8453, "address": "0xfcb34c47f850f452c15ea1b84d51231c38a61783", "symbol": "BRLA", "decimals": 18, "name": "BRLA Token", "currency": "BRL", "issuer": "AVENIA (CNPJ 50.224.164/0001-70)", "address_source": "explorer (basescan / Coinbase listing)" },
+    { "chain_id": 42161, "address": "0xf197ffc28c23e0309b5559e7a166f2c6164c80aa", "symbol": "MXNB", "decimals": 6, "name": "MXNB", "currency": "MXN", "issuer": "Juno (Bitso)", "address_source": "issuer: docs.bitso.com/juno/docs/mxnb-on-arbitrum" },
+    { "chain_id": 8453, "address": "0xf197ffc28c23e0309b5559e7a166f2c6164c80aa", "symbol": "MXNB", "decimals": 6, "name": "MXNB", "currency": "MXN", "issuer": "Juno (Bitso)", "address_source": "CoinGecko (same address as Arbitrum; issuer lists the network without the address)" },
+    { "chain_id": 8453, "address": "0x0dc4f92879b7670e5f4e4e6e3c801d229129d90d", "symbol": "wARS", "decimals": 18, "name": "Peso Argentino", "currency": "ARS", "issuer": "Ripio affiliate (wFIAT)", "address_source": "issuer: wFIAT whitepaper (Ethereum/Base/World Chain)" },
+    { "chain_id": 8453, "address": "0xd76f5faf6888e24d9f04bf92a0c8b921fe4390e0", "symbol": "wBRL", "decimals": 18, "name": "Real Brasileño", "currency": "BRL", "issuer": "Ripio affiliate (wFIAT)", "address_source": "issuer: wFIAT whitepaper (Ethereum/Base/World Chain)" }
+  ]
+}

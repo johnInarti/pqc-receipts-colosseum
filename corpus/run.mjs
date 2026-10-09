@@ -53,8 +53,11 @@ export function kernelOptions(ctx) {
 export function compare(v, expect) {
   const errs = [];
   if (v.valid !== expect.valid) errs.push(`valid ${v.valid} != ${expect.valid}`);
-  for (const l of ['integrity', 'authentic', 'trusted', 'time_anchored', 'finalized']) {
-    if (v.levels[l] !== expect.levels[l]) errs.push(`${l} ${v.levels[l]} != ${expect.levels[l]}`);
+  // spec 2.1: a level absent from expect.levels is expected to be null (not evaluated) — vectors written for
+  // spec 2.0 (five levels) keep their meaning; `onchain` is only ever evaluated for kinds with on-chain facts.
+  for (const l of ['integrity', 'authentic', 'trusted', 'time_anchored', 'finalized', 'onchain']) {
+    const want = expect.levels[l] === undefined ? null : expect.levels[l];
+    if (v.levels[l] !== want) errs.push(`${l} ${v.levels[l]} != ${want}`);
   }
   if (expect.trust_basis !== undefined && v.trust_basis !== expect.trust_basis) errs.push(`trust_basis ${v.trust_basis} != ${expect.trust_basis}`);
   if (expect.exit_code !== undefined && v.exit_code !== expect.exit_code) errs.push(`exit_code ${v.exit_code} != ${expect.exit_code}`);

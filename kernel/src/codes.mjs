@@ -4,11 +4,13 @@
  * implementation (JS, Python, …) MUST emit the same code for the same failure.
  */
 export const KERNEL_ID = 'fractalai-trust-kernel/2';
-export const SPEC_VERSION = '2.0.0';
+export const SPEC_VERSION = '2.1.0';
 
 /** Ordered verdict levels. Each level implies the ones before it except time_anchored/finalized, which
- * imply `authentic` (an anchor proves existence of signed bytes, independently of key trust). */
-export const LEVELS = Object.freeze(['integrity', 'authentic', 'trusted', 'time_anchored', 'finalized']);
+ * imply `authentic` (an anchor proves existence of signed bytes, independently of key trust), and
+ * `onchain` (spec 2.1, §12.4), which implies `authentic` and is evaluated only for kinds that describe an
+ * on-chain fact (latam-stablecoin-receipt): every signed payment fact recomputed from the chain. */
+export const LEVELS = Object.freeze(['integrity', 'authentic', 'trusted', 'time_anchored', 'finalized', 'onchain']);
 
 /** Default policy: a receipt is `valid` when it is authentic AND signed by a key the pinned roots authorize. */
 export const DEFAULT_REQUIRE = Object.freeze(['integrity', 'authentic', 'trusted']);
@@ -16,7 +18,7 @@ export const DEFAULT_REQUIRE = Object.freeze(['integrity', 'authentic', 'trusted
 /** CLI exit codes: 0 valid; 1x = first required level that failed; 2 usage; 3 input could not be read/parsed. */
 export const EXIT = Object.freeze({
   VALID: 0, USAGE: 2, INPUT: 3,
-  integrity: 10, authentic: 11, trusted: 12, time_anchored: 13, finalized: 14,
+  integrity: 10, authentic: 11, trusted: 12, time_anchored: 13, finalized: 14, onchain: 15,
 });
 
 export const C = Object.freeze({
@@ -63,6 +65,18 @@ export const C = Object.freeze({
   KIND_AMBIGUOUS: 'KIND_AMBIGUOUS', KIND_NOT_ALLOWED: 'KIND_NOT_ALLOWED',
   ENGINE_SELFTEST_FAILED: 'ENGINE_SELFTEST_FAILED', ENGINE_UNSAFE_OBJECT_INPUT: 'ENGINE_UNSAFE_OBJECT_INPUT',
   SNAPSHOT_MISMATCH: 'SNAPSHOT_MISMATCH',
+  // latam-stablecoin-receipt (spec §12): integrity
+  REGISTRY_INVALID: 'REGISTRY_INVALID', TOKEN_NOT_PINNED: 'TOKEN_NOT_PINNED', TOKEN_METADATA_MISMATCH: 'TOKEN_METADATA_MISMATCH',
+  AMOUNT_FORMAT_MISMATCH: 'AMOUNT_FORMAT_MISMATCH', PAYMENT_NOT_A_TRANSFER: 'PAYMENT_NOT_A_TRANSFER',
+  // latam-stablecoin-receipt: onchain
+  ONCHAIN_NOT_APPLICABLE: 'ONCHAIN_NOT_APPLICABLE', ONCHAIN_NOT_CHECKED: 'ONCHAIN_NOT_CHECKED', PAYMENT_NO_RPC: 'PAYMENT_NO_RPC',
+  PAYMENT_WRONG_CHAIN: 'PAYMENT_WRONG_CHAIN', PAYMENT_TX_NOT_FOUND: 'PAYMENT_TX_NOT_FOUND', PAYMENT_TX_REVERTED: 'PAYMENT_TX_REVERTED',
+  PAYMENT_LOG_NOT_FOUND: 'PAYMENT_LOG_NOT_FOUND', PAYMENT_LOG_WRONG_CONTRACT: 'PAYMENT_LOG_WRONG_CONTRACT',
+  PAYMENT_LOG_NOT_TRANSFER: 'PAYMENT_LOG_NOT_TRANSFER', PAYMENT_LOG_REMOVED: 'PAYMENT_LOG_REMOVED',
+  PAYMENT_BLOCK_MISMATCH: 'PAYMENT_BLOCK_MISMATCH', PAYMENT_REORGED: 'PAYMENT_REORGED', PAYMENT_TIME_MISMATCH: 'PAYMENT_TIME_MISMATCH',
+  PAYMENT_PARTY_MISMATCH: 'PAYMENT_PARTY_MISMATCH', PAYMENT_AMOUNT_MISMATCH: 'PAYMENT_AMOUNT_MISMATCH',
+  PAYMENT_TOKEN_METADATA: 'PAYMENT_TOKEN_METADATA', PAYMENT_CONFIRMATIONS: 'PAYMENT_CONFIRMATIONS',
+  PAYMENT_NOT_FINALIZED: 'PAYMENT_NOT_FINALIZED', PAYMENT_RPC_MALFORMED: 'PAYMENT_RPC_MALFORMED',
   INTERNAL: 'INTERNAL',
 });
 

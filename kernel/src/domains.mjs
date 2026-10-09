@@ -11,7 +11,9 @@ export const SELF_ATTEST_DOMAIN = 'FRACTALAI-x402-self-attest-v1';
 export const MIDAS_CANON_HEADER = 'FRACTALAI-midas-alert-v1';
 export const SEAL_SCHEMA = 'fractalai.x402-settlement-seal/0.1';
 
-export const USE = Object.freeze({ RECEIPT: 'x402-receipt', GOVERNANCE: 'key-directory-governance' });
+export const STABLECOIN_DOMAIN = 'FRACTALAI-stablecoin-receipt-v1';
+
+export const USE = Object.freeze({ RECEIPT: 'x402-receipt', GOVERNANCE: 'key-directory-governance', STABLECOIN: 'stablecoin-receipt' });
 
 /** route ids with a dedicated kind — they can never be presented as a generic served proof. */
 export const RESERVED_ROUTES = Object.freeze({
@@ -47,6 +49,13 @@ export const KINDS = Object.freeze({
     message: (cid) => `${SELF_ATTEST_DOMAIN}\n${cid}`,
     // A seller's own key: FractalAI's directory never authorizes it. Trust only via an explicit pinned key set.
     uses: [], trust: 'pinned-set-only', signed_time: 'body.sealed_at', anchorable: true,
+  },
+  // spec §12: receipt for an on-chain Transfer of a pinned LatAm stablecoin. Own domain, own key use;
+  // the only kind with an `onchain` level (its signed facts are recomputed from the chain).
+  'latam-stablecoin-receipt': {
+    domain: STABLECOIN_DOMAIN,
+    message: (id) => `${STABLECOIN_DOMAIN}\n${id}`,
+    uses: [USE.STABLECOIN], trust: 'directory', signed_time: 'transfer_canonical.issued_at', anchorable: true, onchain: true,
   },
 });
 export const KIND_NAMES = Object.freeze(Object.keys(KINDS));

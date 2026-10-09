@@ -16,7 +16,7 @@ from ..jcs import canonicalize
 from ._hygiene import parse_json_strict
 from ._verify import verify
 
-LEVELS = ("integrity", "authentic", "trusted", "time_anchored", "finalized")
+LEVELS = ("integrity", "authentic", "trusted", "time_anchored", "finalized", "onchain")
 
 
 def _resolve(v, root: Path, cache: dict):
@@ -81,8 +81,9 @@ def compare(v, expect):
     if v["valid"] != expect["valid"]:
         errs.append(f"valid {v['valid']} != {expect['valid']}")
     for lv in LEVELS:
-        if v["levels"][lv] != expect["levels"][lv]:
-            errs.append(f"{lv} {v['levels'][lv]} != {expect['levels'][lv]}")
+        want = expect["levels"].get(lv)  # spec 2.1: a level absent from the expectation must be null
+        if v["levels"][lv] != want:
+            errs.append(f"{lv} {v['levels'][lv]} != {want}")
     if "trust_basis" in expect and v["trust_basis"] != expect["trust_basis"]:
         errs.append(f"trust_basis {v['trust_basis']} != {expect['trust_basis']}")
     if "exit_code" in expect and v["exit_code"] != expect["exit_code"]:

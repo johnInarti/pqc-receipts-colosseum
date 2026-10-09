@@ -18,6 +18,7 @@ python -m fractalai_pqc_verify.kernel.corpus corpus   # Python port, same vector
 | `manifest.json` | `id → sha256(vector file)`; a runner MUST refuse a corpus whose files and manifest disagree, or an empty one |
 | `fixtures/` | real data: MIDAS receipt `fe62b072…`, key directory epoch 3, anchor records |
 | `fixtures/transcripts/` | **real** JSON-RPC answers (Arc, Arbitrum One, Solana devnet) recorded by `record-live.mjs` |
+| `fixtures/stablecoin/` | **real** JSON-RPC answers behind five real COPM / BRLA / MXNB transfers (Polygon, Base, Arbitrum One; two independent RPCs for COPM and MXNB) recorded by `record-stablecoins.mjs` — spec §12 |
 | `gen.mjs` | deterministic generator (fixed seeds, deterministic ML-DSA-65 / Ed25519). Expectations are written by hand from the spec — never computed by running the kernel |
 
 ## 2. Vector format (`fractalai.trust-corpus/1`)
@@ -41,14 +42,17 @@ python -m fractalai_pqc_verify.kernel.corpus corpus   # Python port, same vector
       "governance_key": "…", "allow_tls_directory": true, "check_anchors": true, "anchors": [ … ],
       "rpc": { "eip155:5042": ["replay://arc"], "solana:devnet": ["replay://sol-devnet"] },
       "solana_signers": [ … ],
+      "check_onchain": true, "token_registry": { … },          // spec §12 (latam-stablecoin-receipt)
       "policy": { "require": [ … ], "allow_testnet_anchors": true, "require_known_anchorer": true,
-                  "min_confirmations": 1, "rpc_quorum": 2, "max_clock_skew_sec": 900 }
+                  "min_confirmations": 1, "rpc_quorum": 2, "max_clock_skew_sec": 900,
+                  "allow_unfinalized_payment": false }
     },
     "rpc_transcript": [ { "url": "replay://arc", "method": "eth_getCode", "params": [ … ], "result": … } ]
   },
   "expect": {
     "valid": false,
     "levels": { "integrity": true, "authentic": true, "trusted": true, "time_anchored": false, "finalized": false },
+                                           // "onchain" (spec 2.1): absent = expected null
     "trust_basis": "pinned-root",          // optional
     "exit_code": 13,                       // optional
     "codes": ["ANCHOR_SQUATTED"]           // each MUST appear among the verdict's reason codes
@@ -69,7 +73,8 @@ parameters (quantities as lowercase `0x` hex without leading zeros).
 
 ## 4. Pass criteria
 
-A vector passes iff `valid` and **all five** levels equal the expectation exactly (`null` = not evaluated), the optional
+A vector passes iff `valid` and **all six** levels equal the expectation exactly (`null` = not evaluated; a level absent
+from `expect.levels` — e.g. `onchain` in a vector written for spec 2.0 — is expected to be `null`), the optional
 `trust_basis` / `exit_code` match, every expected code is present, and an invalid verdict carries at least one reason.
 
 ## 5. Provenance

@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| Version | **2.0.0** (2026-10-07) |
-| Status | Draft for review. Reference implementation: `kernel/` (JavaScript). Second implementation: `python/src/fractalai_pqc_verify/kernel/`. Executable specification: `corpus/` (both pass 129/129). |
+| Version | **2.1.0** (2026-10-08) — 2.0.0 (2026-10-07) + kind `latam-stablecoin-receipt` and level `onchain` (§12), purely additive |
+| Status | Draft for review. Reference implementation: `kernel/` (JavaScript). Second implementation: `python/src/fractalai_pqc_verify/kernel/`. Executable specification: `corpus/` (both pass 173/173). |
 | Supersedes | the per-module trust logic of `verifier/` and `conformance/` ≤ 0.3 (they now delegate here) |
 | Keywords | MUST, MUST NOT, SHOULD, MAY as in RFC 2119 / RFC 8174 |
 
@@ -45,13 +45,13 @@ validator collusion on Arc, deep reorgs past finality).
 - **Signed projection** (`signed`): the data returned to the caller, derived exclusively from the signed bytes (or
   from content committed by a signed hash, e.g. `snapshot` via `snapshot_hash`).
 - **Signed time** (`T_s`): the time the signer put inside the signed bytes (`emitted_at` in a MIDAS canonical,
-  `sealed_at` in a seal body), as unix seconds. Kinds without one have `T_s = null`.
+  `sealed_at` in a seal body, `issued_at` in a stablecoin canonical), as unix seconds. Kinds without one have `T_s = null`.
 - **Trust roots**: `kernel/trust-roots.json` — pinned governance key, pinned directory checkpoint (epoch 3,
   root `8748d4d6…88d7`, verified 2026-10-07), pinned anchor deployments (`chainId → contract, runtime code
   hash`), Solana cluster genesis hashes, announced anchor signers, known anchorers. Plus
-  `kernel/checkpoint-directory.json`, the full body of the checkpoint epoch.
+  `kernel/checkpoint-directory.json`, the full body of the checkpoint epoch, and `kernel/latam-stablecoins.json`, the pinned token registry (§12.1).
 - **Override**: any caller-supplied replacement of a trust root (`roots`, `governanceKey`, `trustedKeys`,
-  `allowTlsDirectory`, `solanaSigners`, `allowObjectInput`). Overrides are legal and MUST be reported.
+  `allowTlsDirectory`, `solanaSigners`, `allowObjectInput`, `tokenRegistry`). Overrides are legal and MUST be reported.
 
 ## 4. Only what is signed
 
@@ -74,7 +74,7 @@ This is the subset every runtime canonicalises identically.
 verdict. Anchor references are hints (§7) and are never part of the projection.
 
 4.5 A document that carries the distinctive fields of two kinds (`canonical`/`receipt_id`/`served_message`/
-`facts`/`snapshot` vs `body` vs `decision` vs `route_id`/`digest`), or whose optional `profile` label does not
+`facts`/`snapshot` vs `body` vs `decision` vs `route_id`/`digest` vs `transfer_canonical`/`transfer_id`/`transfer`), or whose optional `profile` label does not
 name the verified kind, MUST be refused (`KIND_AMBIGUOUS`).
 
 ## 5. Domain table (normative)
@@ -86,12 +86,17 @@ name the verified kind, MUST be refused (`KIND_AMBIGUOUS`).
 | `acp-verdict` | `FRACTALAI-x402-served-v1\nx402-attest-decision\n` + sha256hex(JCS(decision)) | `x402-receipt` | directory | — |
 | `served-proof` | `FRACTALAI-x402-served-v1\n<route>\n<digest>`, route ∉ {midas-alert, x402-witness, x402-attest-decision}, route `^[a-z0-9][a-z0-9-]{0,63}$`, digest 64 lowercase hex | `x402-receipt` | directory | — |
 | `self-attest-seal` | `FRACTALAI-x402-self-attest-v1\n` + sha256hex(JCS(body)) | none | explicit pinned key set only | `body.sealed_at` |
+| `latam-stablecoin-receipt` (§12) | `FRACTALAI-stablecoin-receipt-v1\n` + sha256hex(transfer_canonical) | `stablecoin-receipt` | directory | canonical `issued_at=` |
 | key directory | `FRACTALAI-key-directory-v1\n` + root | governance key (never listed as a receipt key) | trust roots | — |
 
 MIDAS canonical: first line `FRACTALAI-midas-alert-v1`, then `key=value` lines, keys `^[a-z][a-z0-9_]{0,63}$`,
 no duplicates, no CR/NUL/U+2028/U+2029, ≤ 8 KiB, all of `address chain_id health_factor threshold collateral_usd
 debt_usd risk_tier observed_at source snapshot_hash emitted_at` present, `emitted_at` a canonical decimal.
 `sealed_at`: `YYYY-MM-DDTHH:MM:SS(.sss)?Z`, a real calendar time; `T_s` = floor(seconds).
+
+Domain separation: the first line of every signed message (`FRACTALAI-x402-served-v1`, `FRACTALAI-x402-self-attest-v1`,
+`FRACTALAI-stablecoin-receipt-v1`, `FRACTALAI-key-directory-v1`) is distinct, and a key's directory `use` authorizes
+exactly the kinds listed above, so a signature for one product can never be presented as another.
 
 ## 6. Key directory
 
@@ -195,7 +200,9 @@ Input: receipt (text or object), options. Output: the verdict of §9.2. The algo
    kind (§4, §5); if `expectedId` is given it MUST equal the content id (`EXPECTED_ID_MISMATCH`).
 3. **authentic**: ML-DSA-65 Verify(public key, rebuilt message, signature) (`SIGNATURE_INVALID`). Only now is
    `signed` (the projection) exposed.
-4. **time proofs** (if `checkAnchors` or the policy requires `time_anchored`/`finalized`): §7.
+4. **onchain** (if `checkOnchain` or the policy requires `onchain`): §12.4 for kinds with on-chain facts; any other kind
+   → `ONCHAIN_NOT_APPLICABLE`. Synchronous/offline verification → `ONCHAIN_NOT_CHECKED`.
+4b. **time proofs** (if `checkAnchors` or the policy requires `time_anchored`/`finalized`): §7.
 5. **trusted**: with `trustedKeys` (override) — non-empty list, key ∈ list, signed time not in the future.
    Otherwise: self-attest seals → `SELF_ATTEST_NOT_TRUSTED`; a directory is required (`NO_TRUST_SOURCE`);
    verify it (§6.1, §6.2) against the roots; the signing key MUST be listed (`KEY_NOT_LISTED`) and authorized
@@ -206,14 +213,16 @@ Input: receipt (text or object), options. Output: the verdict of §9.2. The algo
 9.2 Verdict:
 ```
 { kernel, spec_version, kind, valid,
-  levels: { integrity, authentic, trusted, time_anchored, finalized },   // true | false | null (not evaluated)
+  levels: { integrity, authentic, trusted, time_anchored, finalized, onchain },   // true | false | null (not evaluated)
   trust_basis: "pinned-root" | "override" | "tls" | "none",
   key: { kid, use, status, not_before, not_after, revoked_at, evaluated_at, time_basis: signed|verification-time|anchor },
   directory: { epoch, root, chain_epochs, checkpoint_epoch }, signed, signed_time,
-  anchors: [ { ref, ok, counts, facts, reason } ], overrides: [..], ignored_unsigned_fields: [..],
+  anchors: [ { ref, ok, counts, facts, reason } ], onchain: { …recomputed payment facts } | null,
+  overrides: [..], ignored_unsigned_fields: [..],
   reasons: [ { level, code, detail } ], exit_code, engine: { self_test_ok, native_json_key_cache_ok } }
 ```
-Exit codes: 0 valid · 10 integrity · 11 authentic · 12 trusted · 13 time_anchored · 14 finalized · 2 usage · 3 input.
+Exit codes: 0 valid · 10 integrity · 11 authentic · 12 trusted · 13 time_anchored · 14 finalized · 15 onchain · 2 usage · 3 input.
+A level that a 2.0 verdict did not have (`onchain`) is `null` whenever it is not evaluated, so 2.0 consumers are unaffected.
 
 ## 10. Anchor before publish (anti-squatting)
 
@@ -251,6 +260,121 @@ soon as the receipt is. Hence:
 - Python's `bounded_fetch` uses per-socket-operation timeouts (urllib); only the JS fetch enforces a single total
   deadline. The corpus does not depend on either.
 
+## 12. Kind `latam-stablecoin-receipt` (spec 2.1)
+
+A post-quantum receipt that an ERC-20 `Transfer` of a **pinned** Latin-American stablecoin **already happened**
+on-chain: which token, how much, from whom, to whom, in which transaction, log and block, and at what block time.
+It certifies a past on-chain fact. It does not move funds, it is not a payment instruction, and it says nothing
+about the identity of the parties, the origin of the funds or the issuer's reserves.
+
+### 12.1 Pinned registry
+
+`kernel/latam-stablecoins.json` (format `fractalai.stablecoin-registry/1`, id `fractalai.latam-stablecoins/1`) is a
+trust root: a list of `{chain_id, address (lowercase), symbol, decimals}`; no `(chain_id, address)` twice; decimals
+0…77. A receipt is only meaningful for a token in this list. A caller MAY override it (`tokenRegistry`), which is
+reported in `overrides`; a malformed registry is `REGISTRY_INVALID`. The registry pins **addresses per chain**: the
+same address can be a different token on another chain, and a look-alike contract with the same symbol is not the
+token. Version 1 lists COPM (Polygon), BRLA (Polygon, Base), MXNB (Arbitrum One, Base), wARS and wBRL (Base), each
+re-read on 2026-10-08 (`symbol()`, `decimals()`, `eth_chainId`) on two independent public RPCs per chain.
+
+### 12.2 Signed canonical and document
+
+The signed message is `FRACTALAI-stablecoin-receipt-v1\n` + sha256hex(`transfer_canonical`) (UTF-8, empty context).
+`transfer_canonical` is the header line `FRACTALAI-stablecoin-transfer-v1` followed by exactly these 18 `key=value`
+lines, **in this order**, with no other line (≤ 4096 characters, LF only):
+
+| # | key | value (regex, full match) | meaning |
+|---|---|---|---|
+| 1 | `registry` | `[a-z0-9][a-z0-9.-]{0,63}/[1-9][0-9]{0,5}` | id of the registry the token was checked against |
+| 2 | `chain_id` | canonical decimal, > 0 | EIP-155 chain id |
+| 3 | `token` | `0x[0-9a-f]{40}` | the emitting contract (lowercase) |
+| 4 | `token_symbol` | `[A-Za-z0-9.-]{1,16}` | `symbol()` as pinned and as read on-chain |
+| 5 | `token_decimals` | `0` or `[1-9][0-9]?` | `decimals()` as pinned and as read on-chain |
+| 6 | `from` | `0x[0-9a-f]{40}` | Transfer `from` (topic 1) |
+| 7 | `to` | `0x[0-9a-f]{40}` | Transfer `to` (topic 2) |
+| 8 | `amount` | `[1-9][0-9]{0,77}`, ≤ 2^256−1 | Transfer value in smallest units |
+| 9 | `amount_decimal` | `(0` or `[1-9][0-9]{0,77})(\.[0-9]{0,76}[1-9])?` | `amount` rendered at `token_decimals`, no trailing zeros |
+| 10 | `tx_hash` | `0x[0-9a-f]{64}` | transaction |
+| 11 | `log_index` | canonical decimal | block-level log index of the Transfer |
+| 12 | `block_number` | canonical decimal | block that carries the transaction |
+| 13 | `block_hash` | `0x[0-9a-f]{64}` | its hash at issuance |
+| 14 | `block_timestamp` | canonical decimal | header timestamp (unix s) |
+| 15 | `confirmations` | canonical decimal ≥ 1 | head − block + 1 at issuance (minimum over the issuer's RPCs) |
+| 16 | `finality` | `finalized` or `confirmed` | `finalized` iff every issuer RPC reported `finalized` ≥ block |
+| 17 | `issued_at` | canonical decimal ≥ `block_timestamp` | signed time `T_s` |
+| 18 | `reference` | `[A-Za-z0-9._:/-]{0,64}` | label supplied by the requester (e.g. an invoice id); signed as an **association only, never verified** |
+
+"Canonical decimal" = `0|[1-9][0-9]{0,15}` and a safe integer. The receipt document is a JSON object with
+`transfer_canonical`, `public_key`, `signature` (canonical base64, §8.2) and optional unsigned copies, each of which
+MUST equal the signed content exactly (§4.2): `algorithm` = `ml-dsa-65`; `domain` = `FRACTALAI-stablecoin-receipt-v1`
+(`DOMAIN_MISMATCH`); `transfer_id` = sha256hex(transfer_canonical) (`RECEIPT_ID_MISMATCH`); `signed_message` = the
+rebuilt message (`SIGNED_MESSAGE_MISMATCH`); `issued_at` = the signed value as a JSON number; `transfer` = an object
+with exactly the 18 keys whose values are **strings** equal to the signed ones (`UNSIGNED_FIELD_MISMATCH` — numbers
+are refused because a uint256 compared as an IEEE-754 double is ambiguous, A8). `profile`, if present, MUST be
+`latam-stablecoin-receipt`. Distinctive fields for §4.5: `transfer_canonical`, `transfer_id`, `transfer`. Content id
+(`expectedId`) = `transfer_id`. The kind is anchorable (§7, `observedAt` = `issued_at`).
+
+### 12.3 Integrity rules (offline) and issuer obligations
+
+After the strict parse (`CANONICAL_MALFORMED` for any deviation, including `issued_at < block_timestamp`):
+`registry` MUST equal the pinned registry id and `(chain_id, token)` MUST be listed (`TOKEN_NOT_PINNED`);
+`token_symbol`/`token_decimals` MUST equal the pinned entry (`TOKEN_METADATA_MISMATCH`); `amount_decimal` MUST equal
+the rendering of `amount` (`AMOUNT_FORMAT_MISMATCH`); `from` and `to` MUST NOT be the zero address
+(`PAYMENT_NOT_A_TRANSFER`: mints and burns are not payments; `amount` > 0 is enforced by the canonical).
+
+An **issuer** MUST read every fact from the chain (never from the requester), MUST run the observation of §12.4 on
+every RPC it uses and require agreement, and MUST refuse to sign: a reverted transaction, a log whose emitter is not
+pinned, a non-Transfer log, a mint/burn, a zero amount, a token whose live `symbol()`/`decimals()` differ from the
+registry, a non-canonical block, fewer confirmations than its policy, a block that is not `finalized` (unless its
+policy explicitly issues `confirmed` receipts). It SHOULD self-verify every receipt with this algorithm before
+serving it (the reference issuer in `issuer/` does).
+
+### 12.4 Level `onchain` — the facts recomputed from the chain
+
+RPC URLs: `rpc["eip155:<chain_id>"]`, else the registry's `default_rpc` for that chain, else `PAYMENT_NO_RPC`; fewer
+than `policy.rpcQuorum` → `RPC_QUORUM`. On **each** URL, exactly these calls (quantities as lowercase `0x` hex
+without leading zeros; the corpus replays them byte-for-byte):
+
+1. `eth_chainId` = `chain_id`, else `PAYMENT_WRONG_CHAIN`.
+2. `eth_getTransactionReceipt(tx_hash)`: `null` → `PAYMENT_TX_NOT_FOUND`; `status` `0x0` → `PAYMENT_TX_REVERTED`
+   (anything but `0x1`/`0x0` → `PAYMENT_RPC_MALFORMED`); `transactionHash` equal; `blockHash` 32 bytes. Exactly one
+   log with `logIndex = log_index` (`PAYMENT_LOG_NOT_FOUND`); `removed: true` → `PAYMENT_LOG_REMOVED`; its block and
+   transaction fields equal the receipt's; emitter = `token` (`PAYMENT_LOG_WRONG_CONTRACT`); exactly 3 topics,
+   `topics[0]` = keccak256(`Transfer(address,address,uint256)`) = `0xddf252ad…b3ef`, topics 1–2 left-padded
+   addresses, `data` exactly 32 bytes (`PAYMENT_LOG_NOT_TRANSFER`).
+3. `eth_getBlockByNumber(<receipt blockNumber>, false)`: same number; `hash` = receipt `blockHash`, else
+   `PAYMENT_REORGED`; `time := header.timestamp`.
+4. `eth_call({to: token, data: 0x95d89b41}, "latest")` (symbol: strict ABI string, UTF-8, no BOM stripping) and
+   `eth_call({to: token, data: 0x313ce567}, "latest")` (decimals: one word ≤ 255); undecodable → `PAYMENT_TOKEN_METADATA`.
+5. `eth_blockNumber` → `confirmations = head − block + 1`.
+6. `eth_getBlockByNumber("finalized", false)` → `finalized := number ≥ block` (an error counts as not finalized).
+
+All RPCs MUST agree on chain id, token, from, to, amount, tx, log index, block number, block hash, block time, symbol
+and decimals (`RPC_DISAGREEMENT`); `confirmations` = the minimum, `finalized` = all. Then, against the **signed**
+fields: block number (`PAYMENT_BLOCK_MISMATCH`), block hash (`PAYMENT_REORGED` — the signed block is no longer the
+canonical block of the transaction), block time (`PAYMENT_TIME_MISMATCH`), from/to (`PAYMENT_PARTY_MISMATCH`), amount
+(`PAYMENT_AMOUNT_MISMATCH`), live symbol/decimals (`PAYMENT_TOKEN_METADATA`); confirmations ≥ max(1,
+`policy.minConfirmations`) and ≥ the signed `confirmations` (`PAYMENT_CONFIRMATIONS`); a signed `finality =
+finalized` requires `finalized` (`PAYMENT_NOT_FINALIZED`), and so does every receipt unless
+`policy.allowUnfinalizedPayment`. On success `onchain = true` and the verdict carries the recomputed facts.
+
+The level is evaluated after `authentic` and before `trusted`, and it does not depend on key trust: a receipt can be
+`onchain = true` and `trusted = false` (genuine chain facts, untrusted signer) or `trusted = true` and
+`onchain = false` (a trusted key signed facts the chain contradicts — the signature of a compromised or buggy issuer).
+
+### 12.5 Limits (honest)
+
+- Same RPC trust model as §11: without a light client the verifier believes the configured RPCs; several must agree.
+  Public RPCs rate-limit (HTTP 403/429 observed on 2026-10-08) and the verifier then fails closed with `RPC_ERROR`.
+- `symbol()`/`decimals()` are read at `latest` (most RPCs are not archive nodes): a later proxy upgrade that changes
+  them makes old receipts fail `onchain` — deliberately, until the registry is reviewed.
+- Finality is what each RPC's `finalized` tag reports (Polygon PoS milestones, Base / Arbitrum L1 finality); RPCs
+  disagree on it in practice (corpus `N-SC-claimed-finality-not-reported`, recorded from real answers).
+- `reference` is not verified; `from`/`to` are addresses, not people or companies. No KYC, sanctions screening,
+  travel-rule data or regulatory classification is implied by a receipt.
+- Production trust requires a directory key with `use = stablecoin-receipt`; the published epoch 3 has none (corpus
+  `N-SC-production-directory-has-no-stablecoin-key`).
+
 ## Appendix A — reason codes
 
 See `kernel/src/codes.mjs` (normative list; the Python port's `_codes.py` is generated from it).
@@ -278,3 +402,4 @@ See `kernel/src/codes.mjs` (normative list; the Python port's `_codes.py` is gen
 | python F3/F4/F7/F11, N2 | §8.1, §8.2, §6.1, strict types | `N-PYF4-*`, `N-PYF7-*`, `N-RTE10c-*`, `N-PYN2-*`, `N-PYF11-*` |
 | python F8/F8b | §6.3 signed time; malformed lifecycle invalid | `N-PYF8b-*`, `N-PYF2d-*` |
 | python F9, N1 | §8.4 self-tests | `N-PYN1-*`, unit tests |
+| stablecoin design review (2026-10-08): forged copy, re-signed facts, look-alike token, foreign log, revert, reorg, wrong chain, lying RPC, finality over-claim | §12.2–§12.4 | `P30`–`P37` (real COPM/BRLA/MXNB transfers), `N-SC-*`, `issuer/test` |

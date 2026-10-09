@@ -43,6 +43,7 @@ jobs:
         run: |
           cmp kernel/trust-roots.json python/src/fractalai_pqc_verify/kernel/trust-roots.json
           cmp kernel/checkpoint-directory.json python/src/fractalai_pqc_verify/kernel/checkpoint-directory.json
+          cmp kernel/latam-stablecoins.json python/src/fractalai_pqc_verify/kernel/latam-stablecoins.json
 
   examples:
     runs-on: ubuntu-latest

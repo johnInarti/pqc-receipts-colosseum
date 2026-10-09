@@ -14,6 +14,7 @@ import { verifyDirectoryChain } from './directory.mjs';
 import { keyAuthorizes } from './lifecycle.mjs';
 import { verifyEvmAnchor } from './anchors/evm.mjs';
 import { verifySolanaAnchor } from './anchors/solana.mjs';
+import { verifyStablecoinPayment, registryLookup } from './stablecoin.mjs';
 import { SELF_TEST } from './selftest.mjs';
 import { BAKED_ROOTS, BAKED_CHECKPOINT_DIRECTORY } from './roots.mjs';
 
@@ -39,6 +40,7 @@ function normalizePolicy(p = {}) {
     minConfirmations: Number.isSafeInteger(p.minConfirmations) && p.minConfirmations >= 0 ? p.minConfirmations : 1,
     rpcQuorum: Number.isSafeInteger(p.rpcQuorum) && p.rpcQuorum >= 1 ? p.rpcQuorum : 1,
     skew: Number.isSafeInteger(p.maxClockSkewSec) && p.maxClockSkewSec >= 0 ? p.maxClockSkewSec : 900,
+    allowUnfinalizedPayment: p.allowUnfinalizedPayment === true,
   };
 }
 
@@ -52,15 +54,17 @@ function normalizePolicy(p = {}) {
  *   governanceKey, roots, allowTlsDirectory   OVERRIDES of the baked trust roots
  *   anchors             anchor references (default: receipt.anchors | receipt.anchor); checkAnchors: evaluate them
  *   rpc                 { 'eip155:42161': [urls], 'solana:devnet': [urls] }; solanaSigners (override)
- *   policy              { require, allowTestnetAnchors, requireKnownAnchorer, minConfirmations, rpcQuorum, maxClockSkewSec }
+ *   checkOnchain        evaluate level `onchain` (kinds with on-chain facts: latam-stablecoin-receipt)
+ *   tokenRegistry       OVERRIDE of the pinned stablecoin registry (kernel/latam-stablecoins.json)
+ *   policy              { require, allowTestnetAnchors, requireKnownAnchorer, minConfirmations, rpcQuorum, maxClockSkewSec, allowUnfinalizedPayment }
  *   now, fetchImpl, timeoutMs, allowObjectInput
  */
 function* core(input, opts) {
   const v = {
     kernel: KERNEL_ID, spec_version: SPEC_VERSION, kind: null, valid: false,
-    levels: { integrity: false, authentic: false, trusted: false, time_anchored: null, finalized: null },
+    levels: { integrity: false, authentic: false, trusted: false, time_anchored: null, finalized: null, onchain: null },
     trust_basis: 'none', policy: null, key: null, directory: null, signed: null, signed_time: null,
-    anchors: [], overrides: [], ignored_unsigned_fields: [], reasons: [], exit_code: EXIT.integrity,
+    anchors: [], onchain: null, overrides: [], ignored_unsigned_fields: [], reasons: [], exit_code: EXIT.integrity,
     engine: { self_test_ok: SELF_TEST.ok, native_json_key_cache_ok: SELF_TEST.native_json_key_cache_ok },
   };
   const reason = (level, e) => {
@@ -83,8 +87,9 @@ function* core(input, opts) {
     if (opts.allowObjectInput === true && !SELF_TEST.native_json_key_cache_ok) v.overrides.push('allowObjectInput (engine JSON key-cache self-test failed)');
 
     // ── 1. integrity ────────────────────────────────────────────────────────────────────────────
-    let receipt, parsed;
+    let receipt, parsed, tokenRegistry;
     try {
+      if (opts.tokenRegistry !== undefined) { tokenRegistry = toValue(opts.tokenRegistry, 'tokenRegistry', true); v.overrides.push('tokenRegistry'); }
       receipt = toValue(input, 'receipt', allowObject);
       if (!isPlainObject(receipt)) throw new KernelError(C.INPUT_SHAPE, 'receipt is not a JSON object');
       const allowed = opts.kind !== undefined ? [opts.kind] : Array.isArray(opts.kinds) ? opts.kinds : null;
@@ -93,7 +98,7 @@ function* core(input, opts) {
       const kind = allowed.length === 1 ? allowed[0] : inferKind(receipt);
       if (!allowed.includes(kind)) throw new KernelError(C.KIND_NOT_ALLOWED, `receipt looks like ${kind}, policy allows ${allowed.join(', ')}`);
       v.kind = kind;
-      parsed = parseReceipt(receipt, kind);
+      parsed = parseReceipt(receipt, kind, { tokenRegistry });
       if (opts.expectedId !== undefined && opts.expectedId !== parsed.content_id) throw new KernelError(C.EXPECTED_ID_MISMATCH, 'the receipt is not the one that was requested (content id differs)');
       v.levels.integrity = true;
       v.ignored_unsigned_fields = parsed.ignored;
@@ -108,6 +113,18 @@ function* core(input, opts) {
     v.levels.authentic = true;
     v.signed = parsed.signed;
     v.key = { kid: kidForKey(parsed.public_key_b64) };
+
+    // ── 2b. on-chain facts (spec §12.4) — only kinds that describe an on-chain event ───────────────
+    if (opts.checkOnchain === true || policy.require.includes('onchain')) {
+      v.levels.onchain = false;
+      if (!KINDS[parsed.kind].onchain) reason('onchain', new KernelError(C.ONCHAIN_NOT_APPLICABLE, `kind ${parsed.kind} carries no on-chain facts`));
+      else {
+        const res = yield { type: 'onchain', signed: parsed.signed, ctx: { rpcUrls: opts.rpc?.[`eip155:${parsed.signed.chain_id}`], policy, fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs, lookup: registryLookup(tokenRegistry) } };
+        if (res === null) reason('onchain', new KernelError(C.ONCHAIN_NOT_CHECKED, 'offline (synchronous) verification does not recompute on-chain facts — use verify()'));
+        else if (res.error) reason('onchain', res.error);
+        else { v.levels.onchain = true; v.onchain = res.facts; }
+      }
+    }
 
     // ── 3. time proofs (before trust: a revoked key needs one) ──────────────────────────────────
     const wantAnchors = opts.checkAnchors === true || policy.require.includes('time_anchored') || policy.require.includes('finalized');
@@ -124,7 +141,7 @@ function* core(input, opts) {
       if (opts.solanaSigners) v.overrides.push('solanaSigners');
       const roots = opts.roots ?? BAKED_ROOTS;
       const ids = anchorIds(parsed);
-      const recs = yield { refs, base: { roots, ids, signedTime: parsed.signed_time, policy, fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs, rpc: opts.rpc, solanaSigners: opts.solanaSigners } };
+      const recs = yield { type: 'anchors', refs, base: { roots, ids, signedTime: parsed.signed_time, policy, fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs, rpc: opts.rpc, solanaSigners: opts.solanaSigners } };
       if (recs === null) v.reasons.push({ level: 'time_anchored', code: C.NO_ANCHOR, detail: 'offline (synchronous) verification does not evaluate anchors — use verify()' });
       for (const rec of recs || []) {
         if (rec.reason) v.reasons.push({ level: 'time_anchored', code: rec.reason.code, detail: `${rec.ref ?? 'anchor'}: ${rec.reason.detail}` });
@@ -206,16 +223,21 @@ async function evaluateAnchors({ refs, base }) {
   return out;
 }
 
-/** Full verification (anchors evaluated over the network when requested). Never throws. */
+async function evaluateOnchain({ signed, ctx }) {
+  try { return { facts: await verifyStablecoinPayment(signed, ctx) }; }
+  catch (e) { return { error: e instanceof KernelError ? e : new KernelError(C.INTERNAL, String(e?.message ?? e)) }; }
+}
+
+/** Full verification (anchors / on-chain facts evaluated over the network when requested). Never throws. */
 export async function verify(input, opts = {}) {
   const it = core(input, opts || {});
   let r = it.next();
-  while (!r.done) r = it.next(await evaluateAnchors(r.value));
+  while (!r.done) r = it.next(r.value.type === 'onchain' ? await evaluateOnchain(r.value) : await evaluateAnchors(r.value));
   return r.value;
 }
 
-/** Offline, synchronous verification: identical decision, anchors are never evaluated (time levels stay
- * null, or false with NO_ANCHOR when the policy requires them). */
+/** Offline, synchronous verification: identical decision, anchors and on-chain facts are never evaluated
+ * (those levels stay null, or false with NO_ANCHOR / ONCHAIN_NOT_CHECKED when the policy requires them). */
 export function verifySync(input, opts = {}) {
   const it = core(input, opts || {});
   let r = it.next();

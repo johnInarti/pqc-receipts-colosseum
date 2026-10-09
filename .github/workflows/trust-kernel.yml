@@ -25,6 +25,8 @@ jobs:
       - run: npm ci
         working-directory: corpus
       - run: npm ci
+        working-directory: issuer
+      - run: npm ci
         working-directory: verifier
       - run: npm ci
         working-directory: conformance
@@ -35,6 +37,9 @@ jobs:
         run: node corpus/gen.mjs && git diff --exit-code corpus/
       - name: corpus — 100 % required
         run: node corpus/run.mjs
+      - name: stablecoin receipt issuer (real COPM/BRLA/MXNB transfers replayed, refusals, CLI end to end)
+        run: npm test
+        working-directory: issuer
       - name: verifier tests
         run: npm test
         working-directory: verifier

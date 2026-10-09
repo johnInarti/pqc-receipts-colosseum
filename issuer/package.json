@@ -1,0 +1,15 @@
+{
+  "name": "@fractalai/stablecoin-receipt-issuer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Issuer (library + CLI) of latam-stablecoin-receipt: a post-quantum (ML-DSA-65 / FIPS 204) receipt for an ERC-20 Transfer of a pinned Latin-American stablecoin that already happened on-chain. Reads the Transfer from public RPCs, never from the requester; signs with an operator-supplied key; emits only what the Trust Kernel accepts. Spec: spec/TRUST-KERNEL.md §12.",
+  "type": "module",
+  "exports": { ".": "./src/issue.mjs" },
+  "bin": { "fractalai-stablecoin-receipt": "./bin/fractalai-stablecoin-receipt.mjs" },
+  "scripts": { "test": "node --test test/*.test.mjs" },
+  "engines": { "node": ">=20" },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@noble/post-quantum": "~0.6.1"
+  }
+}

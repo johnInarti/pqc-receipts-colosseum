@@ -31,8 +31,8 @@ subscribers, treasury 99.01 USDC**. One founder (Colombia), no employees, no pri
 
 Every trust decision in this repository is made by **one** implementation, [`kernel/`](kernel/), specified normatively
 in [`spec/TRUST-KERNEL.md`](spec/TRUST-KERNEL.md) and pinned down by an executable specification,
-[`corpus/`](corpus/) (173 vectors: every proof of concept from four internal red-teams + real production positives +
-the LatAm stablecoin receipts below).
+[`corpus/`](corpus/) (217 vectors: every proof of concept from four internal red-teams + real production positives +
+the LatAm stablecoin receipts below + the protocol-neutral `agent-commerce-receipt`, spec §13).
 `verifier/`, `conformance/` and the Python package delegate to it or reproduce it; both the JavaScript kernel and the
 Python port pass the corpus at 100 %.
 
@@ -52,7 +52,7 @@ cd kernel && npm install
 node bin/fractalai-verify.mjs fe62b072c2740e7a8d10cf7e643905b7d79f3f9b19f1c3970fc8754f18d538ee        # VALID, exit 0
 node bin/fractalai-verify.mjs ../deployments/anchors/PQCReceiptAnchor-5042-fe62b072.json --anchors \
      --require integrity,authentic,trusted,time_anchored,finalized                                     # + Arc time proof
-cd ../corpus && npm install && node run.mjs --live                                                   # 173/173 + live 4/4
+cd ../corpus && npm install && node run.mjs --live                                                   # 217/217 + live 4/4
 ```
 
 The receipt is bound to the id you asked for, the signed message is rebuilt (never read from the receipt), the key

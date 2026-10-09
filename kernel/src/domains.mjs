@@ -12,8 +12,9 @@ export const MIDAS_CANON_HEADER = 'FRACTALAI-midas-alert-v1';
 export const SEAL_SCHEMA = 'fractalai.x402-settlement-seal/0.1';
 
 export const STABLECOIN_DOMAIN = 'FRACTALAI-stablecoin-receipt-v1';
+export const COMMERCE_DOMAIN = 'FRACTALAI-agent-commerce-receipt-v1';
 
-export const USE = Object.freeze({ RECEIPT: 'x402-receipt', GOVERNANCE: 'key-directory-governance', STABLECOIN: 'stablecoin-receipt' });
+export const USE = Object.freeze({ RECEIPT: 'x402-receipt', GOVERNANCE: 'key-directory-governance', STABLECOIN: 'stablecoin-receipt', COMMERCE: 'commerce-receipt' });
 
 /** route ids with a dedicated kind — they can never be presented as a generic served proof. */
 export const RESERVED_ROUTES = Object.freeze({
@@ -56,6 +57,13 @@ export const KINDS = Object.freeze({
     domain: STABLECOIN_DOMAIN,
     message: (id) => `${STABLECOIN_DOMAIN}\n${id}`,
     uses: [USE.STABLECOIN], trust: 'directory', signed_time: 'transfer_canonical.issued_at', anchorable: true, onchain: true,
+  },
+  // spec §13: protocol-neutral receipt binding a payment reference, protocol artifacts (hashes) and the
+  // delivered content hash. Own domain, own key use; its payment facts are profile-defined (no onchain level).
+  'agent-commerce-receipt': {
+    domain: COMMERCE_DOMAIN,
+    message: (id) => `${COMMERCE_DOMAIN}\n${id}`,
+    uses: [USE.COMMERCE], trust: 'directory', signed_time: 'commerce.issued_at', anchorable: true,
   },
 });
 export const KIND_NAMES = Object.freeze(Object.keys(KINDS));

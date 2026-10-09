@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 KERNEL_ID = "fractalai-trust-kernel/2"
-SPEC_VERSION = "2.1.0"
+SPEC_VERSION = "2.2.0"
 LEVELS = ("integrity", "authentic", "trusted", "time_anchored", "finalized", "onchain")
 DEFAULT_REQUIRE = ("integrity", "authentic", "trusted")
 EXIT = {"VALID": 0, "USAGE": 2, "INPUT": 3, "integrity": 10, "authentic": 11, "trusted": 12, "time_anchored": 13, "finalized": 14, "onchain": 15}
@@ -124,6 +124,7 @@ class C:
     PAYMENT_CONFIRMATIONS = "PAYMENT_CONFIRMATIONS"
     PAYMENT_NOT_FINALIZED = "PAYMENT_NOT_FINALIZED"
     PAYMENT_RPC_MALFORMED = "PAYMENT_RPC_MALFORMED"
+    COMMERCE_MALFORMED = "COMMERCE_MALFORMED"
     INTERNAL = "INTERNAL"
 
 

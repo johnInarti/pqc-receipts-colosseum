@@ -20,3 +20,4 @@ export {
   observeTransfer, observeEverywhere, verifyStablecoinPayment, abiDecodeString, abiDecodeUint8,
 } from './stablecoin.mjs';
 export { rpcCall } from './rpc.mjs';
+export { COMMERCE_DOMAIN, COMMERCE_VERSION, COMMERCE_MAX_BYTES, checkCommerceBody, parseCommerceReceipt, commerceSigningMessage } from './commerce.mjs';

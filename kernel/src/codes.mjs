@@ -4,7 +4,7 @@
  * implementation (JS, Python, …) MUST emit the same code for the same failure.
  */
 export const KERNEL_ID = 'fractalai-trust-kernel/2';
-export const SPEC_VERSION = '2.1.0';
+export const SPEC_VERSION = '2.2.0';
 
 /** Ordered verdict levels. Each level implies the ones before it except time_anchored/finalized, which
  * imply `authentic` (an anchor proves existence of signed bytes, independently of key trust), and
@@ -77,6 +77,8 @@ export const C = Object.freeze({
   PAYMENT_PARTY_MISMATCH: 'PAYMENT_PARTY_MISMATCH', PAYMENT_AMOUNT_MISMATCH: 'PAYMENT_AMOUNT_MISMATCH',
   PAYMENT_TOKEN_METADATA: 'PAYMENT_TOKEN_METADATA', PAYMENT_CONFIRMATIONS: 'PAYMENT_CONFIRMATIONS',
   PAYMENT_NOT_FINALIZED: 'PAYMENT_NOT_FINALIZED', PAYMENT_RPC_MALFORMED: 'PAYMENT_RPC_MALFORMED',
+  // agent-commerce-receipt (spec §13): integrity
+  COMMERCE_MALFORMED: 'COMMERCE_MALFORMED',
   INTERNAL: 'INTERNAL',
 });
 

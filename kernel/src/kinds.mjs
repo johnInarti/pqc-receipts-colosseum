@@ -11,6 +11,7 @@ import { jcs, jcsSigned } from './canon.mjs';
 import { sha256hex, ML_DSA_65_PK_BYTES, ML_DSA_65_SIG_BYTES } from './crypto.mjs';
 import { b64decodeStrict, isHex, isPlainObject, own } from './hygiene.mjs';
 import { parseStablecoinReceipt } from './stablecoin.mjs';
+import { parseCommerceReceipt } from './commerce.mjs';
 import { KINDS, MIDAS_CANON_HEADER, RESERVED_ROUTES, ROUTE_RE, SEAL_SCHEMA, SELF_ATTEST_DOMAIN, SERVED_PREFIX } from './domains.mjs';
 
 const MAX_CANONICAL = 8192;
@@ -152,6 +153,7 @@ const MARKERS = {
   'acp-verdict': ['decision'],
   'served-proof': ['route_id', 'digest'],
   'latam-stablecoin-receipt': ['transfer_canonical', 'transfer_id', 'transfer'],
+  'agent-commerce-receipt': ['commerce', 'commerce_id'],
 };
 /** Optional `profile` labels used by the conformance vectors; if present they must name the parsed kind. */
 const PROFILE_ALIAS = { 'served-proof': 'x402-served', 'acp-verdict': 'acp-verdict' };
@@ -172,6 +174,7 @@ export function checkUnambiguous(r, kind) {
 export function inferKind(r) {
   if (!isPlainObject(r)) fail(C.INPUT_SHAPE, 'receipt is not a JSON object');
   if (own(r, 'transfer_canonical')) return 'latam-stablecoin-receipt';
+  if (own(r, 'commerce')) return 'agent-commerce-receipt';
   if (own(r, 'canonical')) return 'midas-alert';
   if (own(r, 'body')) return r.domain === SELF_ATTEST_DOMAIN ? 'self-attest-seal' : 'x402-seal';
   if (own(r, 'decision')) return 'acp-verdict';
@@ -186,6 +189,7 @@ const PARSERS = {
   'acp-verdict': acpVerdict,
   'served-proof': servedProof,
   'latam-stablecoin-receipt': parseStablecoinReceipt,
+  'agent-commerce-receipt': parseCommerceReceipt,
 };
 
 /** @param {object} [ctx]  { tokenRegistry } — kind-specific pinned data (latam-stablecoin-receipt). */

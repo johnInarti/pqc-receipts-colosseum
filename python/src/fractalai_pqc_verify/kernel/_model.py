@@ -9,6 +9,7 @@ from ..jcs import canonicalize
 from ._codes import C, KernelError, fail
 from ._crypto import ML_DSA_65_PK_BYTES, ML_DSA_65_SIG_BYTES, kid_for_key, mldsa_verify, sha256hex
 from ._stablecoin import MARKERS as _SC_MARKERS, STABLECOIN_DOMAIN, STABLECOIN_USE, parse_stablecoin_receipt
+from ._commerce import MARKERS as _COMMERCE_MARKERS, COMMERCE_DOMAIN, COMMERCE_USE, parse_commerce_receipt
 from ._hygiene import MAX_SAFE, b64decode_strict, is_hex, is_num, is_safe_int, is_safe_uint, own
 
 SERVED_PREFIX = "FRACTALAI-x402-served-v1"
@@ -27,6 +28,7 @@ KINDS = {
     "served-proof": {"domain": SERVED_PREFIX, "uses": [USE_RECEIPT], "trust": "directory"},
     "self-attest-seal": {"domain": SELF_ATTEST_DOMAIN, "uses": [], "trust": "pinned-set-only"},
     "latam-stablecoin-receipt": {"domain": STABLECOIN_DOMAIN, "uses": [STABLECOIN_USE], "trust": "directory", "onchain": True},
+    "agent-commerce-receipt": {"domain": COMMERCE_DOMAIN, "uses": [COMMERCE_USE], "trust": "directory"},
 }
 
 # ── canonicalisation of the SIGNED-JSON subset (safe integers only) ──
@@ -61,6 +63,7 @@ MARKERS = {
     "midas-alert": ["canonical", "receipt_id", "served_message", "served_domain", "facts", "snapshot"],
     "x402-seal": ["body"], "self-attest-seal": ["body"], "acp-verdict": ["decision"], "served-proof": ["route_id", "digest"],
     "latam-stablecoin-receipt": _SC_MARKERS,
+    "agent-commerce-receipt": _COMMERCE_MARKERS,
 }
 PROFILE_ALIAS = {"served-proof": "x402-served", "acp-verdict": "acp-verdict"}
 
@@ -228,7 +231,8 @@ def _served(r):
 
 
 PARSERS = {"midas-alert": lambda r, ctx: _midas(r), "x402-seal": lambda r, ctx: _seal_like(r, "x402-seal"), "self-attest-seal": lambda r, ctx: _seal_like(r, "self-attest-seal"),
-           "acp-verdict": lambda r, ctx: _acp(r), "served-proof": lambda r, ctx: _served(r), "latam-stablecoin-receipt": parse_stablecoin_receipt}
+           "acp-verdict": lambda r, ctx: _acp(r), "served-proof": lambda r, ctx: _served(r), "latam-stablecoin-receipt": parse_stablecoin_receipt,
+           "agent-commerce-receipt": parse_commerce_receipt}
 
 
 def infer_kind(r) -> str:
@@ -236,6 +240,8 @@ def infer_kind(r) -> str:
         fail(C.INPUT_SHAPE, "receipt is not a JSON object")
     if "transfer_canonical" in r:
         return "latam-stablecoin-receipt"
+    if "commerce" in r:
+        return "agent-commerce-receipt"
     if "canonical" in r:
         return "midas-alert"
     if "body" in r:

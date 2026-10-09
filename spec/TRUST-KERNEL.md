@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| Version | **2.1.0** (2026-10-08) — 2.0.0 (2026-10-07) + kind `latam-stablecoin-receipt` and level `onchain` (§12), purely additive |
-| Status | Draft for review. Reference implementation: `kernel/` (JavaScript). Second implementation: `python/src/fractalai_pqc_verify/kernel/`. Executable specification: `corpus/` (both pass 173/173). |
+| Version | **2.2.0** (2026-10-09) — 2.1.0 (2026-10-08) + kind `agent-commerce-receipt` (§13), purely additive. 2.1.0 = 2.0.0 (2026-10-07) + kind `latam-stablecoin-receipt` and level `onchain` (§12) |
+| Status | Draft for review. Reference implementation: `kernel/` (JavaScript). Second implementation: `python/src/fractalai_pqc_verify/kernel/`. Executable specification: `corpus/` (both pass 217/217). |
 | Supersedes | the per-module trust logic of `verifier/` and `conformance/` ≤ 0.3 (they now delegate here) |
 | Keywords | MUST, MUST NOT, SHOULD, MAY as in RFC 2119 / RFC 8174 |
 
@@ -74,7 +74,7 @@ This is the subset every runtime canonicalises identically.
 verdict. Anchor references are hints (§7) and are never part of the projection.
 
 4.5 A document that carries the distinctive fields of two kinds (`canonical`/`receipt_id`/`served_message`/
-`facts`/`snapshot` vs `body` vs `decision` vs `route_id`/`digest` vs `transfer_canonical`/`transfer_id`/`transfer`), or whose optional `profile` label does not
+`facts`/`snapshot` vs `body` vs `decision` vs `route_id`/`digest` vs `transfer_canonical`/`transfer_id`/`transfer` vs `commerce`/`commerce_id`), or whose optional `profile` label does not
 name the verified kind, MUST be refused (`KIND_AMBIGUOUS`).
 
 ## 5. Domain table (normative)
@@ -87,6 +87,7 @@ name the verified kind, MUST be refused (`KIND_AMBIGUOUS`).
 | `served-proof` | `FRACTALAI-x402-served-v1\n<route>\n<digest>`, route ∉ {midas-alert, x402-witness, x402-attest-decision}, route `^[a-z0-9][a-z0-9-]{0,63}$`, digest 64 lowercase hex | `x402-receipt` | directory | — |
 | `self-attest-seal` | `FRACTALAI-x402-self-attest-v1\n` + sha256hex(JCS(body)) | none | explicit pinned key set only | `body.sealed_at` |
 | `latam-stablecoin-receipt` (§12) | `FRACTALAI-stablecoin-receipt-v1\n` + sha256hex(transfer_canonical) | `stablecoin-receipt` | directory | canonical `issued_at=` |
+| `agent-commerce-receipt` (§13) | `FRACTALAI-agent-commerce-receipt-v1\n` + sha256hex(JCS(commerce)) | `commerce-receipt` | directory | `commerce.issued_at` |
 | key directory | `FRACTALAI-key-directory-v1\n` + root | governance key (never listed as a receipt key) | trust roots | — |
 
 MIDAS canonical: first line `FRACTALAI-midas-alert-v1`, then `key=value` lines, keys `^[a-z][a-z0-9_]{0,63}$`,
@@ -95,7 +96,7 @@ debt_usd risk_tier observed_at source snapshot_hash emitted_at` present, `emitte
 `sealed_at`: `YYYY-MM-DDTHH:MM:SS(.sss)?Z`, a real calendar time; `T_s` = floor(seconds).
 
 Domain separation: the first line of every signed message (`FRACTALAI-x402-served-v1`, `FRACTALAI-x402-self-attest-v1`,
-`FRACTALAI-stablecoin-receipt-v1`, `FRACTALAI-key-directory-v1`) is distinct, and a key's directory `use` authorizes
+`FRACTALAI-stablecoin-receipt-v1`, `FRACTALAI-agent-commerce-receipt-v1`, `FRACTALAI-key-directory-v1`) is distinct, and a key's directory `use` authorizes
 exactly the kinds listed above, so a signature for one product can never be presented as another.
 
 ## 6. Key directory
@@ -375,6 +376,75 @@ The level is evaluated after `authentic` and before `trusted`, and it does not d
 - Production trust requires a directory key with `use = stablecoin-receipt`; the published epoch 3 has none (corpus
   `N-SC-production-directory-has-no-stablecoin-key`).
 
+## 13. Kind `agent-commerce-receipt` (spec 2.2)
+
+A protocol-neutral post-quantum receipt that **binds**, under one ML-DSA-65 signature and one signed time: identifiers
+of a payment produced by some payment protocol (AP2, an ERC-8004 job, an MCP tool call paid with x402, a PIX/SPEI
+transfer…), commitments (hashes) to that protocol's own artifacts (mandates, receipts, validation requests), and the
+sha256 of the content delivered for that payment. It is the generic form of what `x402-seal` does for x402.
+
+A verdict on this kind states only that **the issuer's key bound these identifiers and this content hash at
+`issued_at`**. It does not state that the payment settled, that the identifiers are genuine, that the content is
+correct, or who the parties are. Those statements belong to the **profile** (§13.4), whose rules a relying party
+applies to the protocol artifacts it holds; the kernel never interprets `payment` or `bindings`.
+
+### 13.1 Signed message and key use
+
+`FRACTALAI-agent-commerce-receipt-v1\n` + sha256hex(JCS(`commerce`)) (UTF-8, empty context). Key `use` MUST be
+`commerce-receipt`; a key with that use authorizes no other kind, and no other use authorizes this kind (§5). The
+signed time `T_s` is `commerce.issued_at`. The kind is anchorable (§7, `observedAt` = `issued_at`). It has no
+`onchain` level (`ONCHAIN_NOT_APPLICABLE`).
+
+### 13.2 The signed body `commerce` (closed shape)
+
+A JSON object with **exactly** these seven keys (any other key, or a missing one, is `COMMERCE_MALFORMED`):
+
+| key | value |
+|---|---|
+| `v` | the string `fractalai.agent-commerce/1` |
+| `protocol` | string `^[a-z0-9][a-z0-9-]{0,31}$` (e.g. `ap2`, `erc8004`, `mcp`, `a2a`, `pix`, `spei`, `bre-b`) |
+| `profile` | string `^[a-z0-9][a-z0-9.-]{0,63}/[1-9][0-9]{0,5}$` (e.g. `ap2.fulfillment/1`) — names the rules of §13.4 |
+| `issued_at` | safe integer ≥ 1 (unix seconds) — the signed time |
+| `payment` | object, 0–16 entries; key `^[a-z][a-z0-9_]{0,63}$`; value a **string** of 1–512 characters in U+0020…U+007E |
+| `bindings` | object, 0–16 entries, same key and value rules as `payment` |
+| `delivery` | object with `sha256` (64 lowercase hex, REQUIRED), optional `media_type` (`^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$`), optional `size` (safe integer ≥ 0); no other key |
+
+Every string is printable ASCII and every number a safe integer, so JCS(`commerce`) is identical in every runtime
+(A8: no Unicode normalisation, no surrogates, no floating point). UTF-8 length of JCS(`commerce`) ≤ 8192 bytes.
+Patterns are full matches (a trailing newline does not match).
+
+### 13.3 The document
+
+`{ commerce, public_key, signature }` plus optional unsigned copies, each of which MUST equal the signed content
+(§4.2): `algorithm` = `ml-dsa-65` (`ALGORITHM`); `domain` = `FRACTALAI-agent-commerce-receipt-v1` (`DOMAIN_MISMATCH`);
+`commerce_id` = sha256hex(JCS(`commerce`)) (`RECEIPT_ID_MISMATCH`); `signed_message` = the rebuilt message
+(`SIGNED_MESSAGE_MISMATCH`); top-level `issued_at` = the signed value as a JSON number (`UNSIGNED_FIELD_MISMATCH`);
+`profile`, if present, MUST be `agent-commerce-receipt` (`KIND_AMBIGUOUS`). Distinctive fields for §4.5: `commerce`,
+`commerce_id`. Content id (`expectedId`) = `commerce_id`. Signed projection: `{ commerce_id, …commerce }`.
+
+### 13.4 Profiles (informative here; normative in each adapter)
+
+A profile fixes, for one protocol, which `payment` and `bindings` keys MUST be present and how a relying party
+re-derives each one from the protocol artifacts. Relying parties MUST apply the profile **after** a kernel verdict
+with `valid = true`, and MUST treat an unknown profile as "binding not checked". Reference profiles (adapters in the
+FractalAI monorepo, `integrations/universal-proof/`):
+
+| profile | binds | re-derivation by the relying party |
+|---|---|---|
+| `ap2.fulfillment/1` | AP2 v0.2 Payment/Checkout Receipt JWTs, their `reference` (closed-mandate hashes), `payment_id`, `psp_confirmation_id`, `network_confirmation_id`, `order_id`, delivered content | sha256 of each receipt JWT (compact, ASCII); ES256 verification of each receipt with the issuer's key; `reference` = base64url(sha256(closed mandate SD-JWT)); `status = Success` |
+| `erc8004.validation/1` | chain (CAIP-2), Validation Registry, Identity Registry, `agentId`, `requestHash`, validator address; the validated work output | `getValidationStatus(requestHash)` on the registry returns that validator and agent and `responseHash = keccak256(receipt bytes)`; keccak256(request payload) = `requestHash` |
+| `mcp.tool-result/1` | tool name, sha256(JCS(arguments)), sha256(JCS(structuredContent ∥ content)), optional sha256(JCS(`x402/payment-response`)) | recomputed from the `CallToolResult` that carries the receipt in `_meta["ai.fractalai/receipt"]` |
+
+### 13.5 Limits (honest)
+
+- The kernel cannot tell a genuine `payment_id` from an invented one; only the profile check against the protocol's
+  own signed artifact (an AP2 ES256 receipt, an ERC-8004 registry entry, a CEP) can. A receipt whose profile was not
+  checked proves the binding claimed by the issuer, nothing more.
+- Production trust requires a directory key with `use = commerce-receipt`; the published epoch 3 has none (corpus
+  `N-AC-production-directory-has-no-commerce-key`).
+- The protocol artifacts themselves remain classically signed (ES256, secp256k1, Ed25519); the post-quantum property
+  covers the binding receipt only.
+
 ## Appendix A — reason codes
 
 See `kernel/src/codes.mjs` (normative list; the Python port's `_codes.py` is generated from it).
@@ -398,6 +468,7 @@ See `kernel/src/codes.mjs` (normative list; the Python port's `_codes.py` is gen
 | anchor RT-S1/S1b/S1c/S2/S3/S4/S5/S7 | §7.3 | `N-RTS*` |
 | action RT-5/8/13 | §9 step 5 / step 2 / §6.3 | `N-RTA5-*`, `N-RTA8-*`, `N-RTA13-*` |
 | python F1/F1b: profile field re-routes verification | §4.5, kind fixed by policy | `N-PYF1*`, `N-PYF1b-*`, `N-kind-*` |
+| spec 2.2 design review: commerce body shape, cross-domain replay, key use | §13.2, §13.1, §5 | `N-AC-*`, `P40`–`P45` |
 | python F2: snapshot / extra facts / emitted_at | §4.2 | `N-PYF2a–d-*` |
 | python F3/F4/F7/F11, N2 | §8.1, §8.2, §6.1, strict types | `N-PYF4-*`, `N-PYF7-*`, `N-RTE10c-*`, `N-PYN2-*`, `N-PYF11-*` |
 | python F8/F8b | §6.3 signed time; malformed lifecycle invalid | `N-PYF8b-*`, `N-PYF2d-*` |

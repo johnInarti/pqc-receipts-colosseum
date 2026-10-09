@@ -117,3 +117,25 @@ export function solTranscript({ url, tx, wire = tx.wire, slot = 4242, statusSlot
   ];
 }
 export { buildMemo, MEMO_PROGRAM_ID, jcs };
+
+// ── agent-commerce-receipt (spec §13) ──
+export const COMMERCE_DOMAIN = 'FRACTALAI-agent-commerce-receipt-v1';
+export const commerceBody = (o = {}) => ({
+  v: 'fractalai.agent-commerce/1', protocol: 'ap2', profile: 'ap2.fulfillment/1', issued_at: 1791399000,
+  payment: { payment_id: 'pay_7f3c9a', psp_confirmation_id: 'psp_7f3c9a', network_confirmation_id: 'net_7f3c9a', order_id: 'order_123' },
+  delivery: { sha256: sha256hex('corpus delivered content'), media_type: 'application/json', size: 24 },
+  bindings: { payment_receipt_sha256: sha256hex('payment-receipt-jwt'), payment_mandate_ref: 'q8nX3T0yCw2vB7m0f1sYbq5mJmHn3c1k3QeY1rWwKxA', checkout_receipt_sha256: sha256hex('checkout-receipt-jwt'), checkout_mandate_ref: 'Zt3o9yXz0bJk2v7mQp1n4r6s8u0w2y4A6C8E0G2I4K8' },
+  ...o,
+});
+/** Sign a commerce body with `key` under `domain` (overridable to build cross-domain negatives). */
+export function commerceReceipt(key, body = commerceBody(), { domain = COMMERCE_DOMAIN } = {}) {
+  const id = sha256hex(jcsSigned(body));
+  const signed_message = `${domain}\n${id}`;
+  return { algorithm: 'ml-dsa-65', domain: COMMERCE_DOMAIN, commerce_id: id, signed_message: `${COMMERCE_DOMAIN}\n${id}`, issued_at: body.issued_at, public_key: key.pk, signature: key.sign(signed_message), commerce: body };
+}
+/** Raw signer for bodies the strict shape refuses (still signed over plain JCS, so only the shape check rejects them). */
+export function commerceReceiptRaw(key, body) {
+  const id = sha256hex(jcs(body));
+  const signed_message = `${COMMERCE_DOMAIN}\n${id}`;
+  return { algorithm: 'ml-dsa-65', public_key: key.pk, signature: key.sign(signed_message), commerce: body };
+}

@@ -22,7 +22,7 @@
  *     --trusted-key B64 (repeatable)   --governance-key B64   --allow-tls-directory
  */
 import { readFileSync, statSync } from 'node:fs';
-import { verify, boundedFetch, oneLine, safeJson, parseJsonStrict, EXIT } from '../src/index.mjs';
+import { verify, boundedFetch, fetchLegacyDirectory, oneLine, safeJson, parseJsonStrict, EXIT } from '../src/index.mjs';
 
 const DEFAULT_DIRECTORY = 'https://fractalai.net.co/.well-known/x402-receipt-keys';
 const DEFAULT_BASE = 'https://fractalai.net.co';
@@ -72,7 +72,7 @@ async function main() {
   const trusted = multi('--trusted-key');
   if (trusted.length) opts.trustedKeys = trusted;
   else {
-    try { opts.directory = await load(one('--directory') ?? DEFAULT_DIRECTORY); } catch (e) { process.stderr.write(`error: cannot read key directory: ${oneLine(e.detail ?? e.message)}\n`); process.exit(EXIT.INPUT); }
+    try { const src = one('--directory') ?? DEFAULT_DIRECTORY; opts.directory = isUrl(src) ? (await fetchLegacyDirectory(src)).text : await load(src); } catch (e) { process.stderr.write(`error: cannot read key directory: ${oneLine(e.detail ?? e.message)}\n`); process.exit(EXIT.INPUT); }
     const hist = multi('--history');
     if (hist.length) opts.directoryHistory = '[' + hist.map(readText).join(',') + ']';
   }

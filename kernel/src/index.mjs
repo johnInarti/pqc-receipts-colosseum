@@ -7,6 +7,7 @@ export { BAKED_ROOTS } from './roots.mjs';
 export { SELF_TEST } from './selftest.mjs';
 export { KINDS, KIND_NAMES, USE, STABLECOIN_DOMAIN, SERVED_PREFIX, KEY_DIR_DOMAIN, SELF_ATTEST_DOMAIN, SEAL_SCHEMA, MIDAS_CANON_HEADER, RESERVED_ROUTES } from './domains.mjs';
 export { parseReceipt, parseMidasCanonical, anchorIds, inferKind } from './kinds.mjs';
+export { fetchLegacyDirectory, LEGACY_DIRECTORY_SPEC, LEGACY_DIRECTORY_PATH, SPEC_DIRECTORY_PATH } from './locate.mjs';
 export { verifyDirectoryChain, checkEpoch, directoryRoot, ZERO_ROOT, STATUSES } from './directory.mjs';
 export { keyAuthorizes } from './lifecycle.mjs';
 export { parseJsonStrict, assertJsonValue, b64decodeStrict, b64encode, oneLine, safeJson, boundedFetch, fetchJsonStrict, LIMITS } from './hygiene.mjs';

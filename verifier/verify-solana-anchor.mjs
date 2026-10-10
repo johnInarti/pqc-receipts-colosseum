@@ -9,7 +9,7 @@
 //        [--rpc URL] [--cross-rpc URL]… [--signer PUBKEY (override)] [--keys-url URL] [--trusted-key B64]…
 // exit: 0 valid · 10–13 first failed level · 2 usage · 3 input
 import { readFileSync } from 'node:fs';
-import { boundedFetch, parseJsonStrict, oneLine, safeJson, EXIT } from '@fractalai/pqc-trust-kernel';
+import { boundedFetch, fetchLegacyDirectory, parseJsonStrict, oneLine, safeJson, EXIT } from '@fractalai/pqc-trust-kernel';
 import { verifySolanaAnchor } from './src/solana-anchor.mjs';
 
 const args = process.argv.slice(2);
@@ -25,7 +25,7 @@ try {
   const receipt = opt('--receipt') ? read(opt('--receipt')) : record?.seal;
   if (!signature || !receipt) { console.error('usage: node verify-solana-anchor.mjs (--record file.json | --sig SIG --receipt receipt.json) [--cluster C] [--rpc URL]'); process.exit(EXIT.USAGE); }
   const trusted = many('--trusted-key');
-  const keyDirectory = trusted.length ? undefined : await boundedFetch(opt('--keys-url') ?? DEFAULT_KEYS);
+  const keyDirectory = trusted.length ? undefined : (await fetchLegacyDirectory(opt('--keys-url') ?? DEFAULT_KEYS)).text;
   const r = await verifySolanaAnchor({
     signature, receipt, cluster, rpcUrl: opt('--rpc'), crossCheckRpcUrls: many('--cross-rpc'), expectedSigner: opt('--signer'),
     keyDirectory, trustedPublicKeysB64: trusted.length ? trusted : undefined,

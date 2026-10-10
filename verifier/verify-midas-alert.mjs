@@ -6,7 +6,7 @@
 // Fetches have a hard deadline covering headers AND body and a 2 MiB cap.
 // usage: node verify-midas-alert.mjs [receipt_id] [--json]   (default: the public receipt fe62b072…)
 // exit: 0 valid · 10 integrity · 11 authentic · 12 trusted · 3 could not fetch
-import { verify, boundedFetch, oneLine, safeJson, EXIT } from '@fractalai/pqc-trust-kernel';
+import { verify, boundedFetch, fetchLegacyDirectory, oneLine, safeJson, EXIT } from '@fractalai/pqc-trust-kernel';
 
 const args = process.argv.slice(2);
 const id = args.find((a) => !a.startsWith('--')) || 'fe62b072c2740e7a8d10cf7e643905b7d79f3f9b19f1c3970fc8754f18d538ee';
@@ -17,7 +17,7 @@ const timeoutMs = Math.min(20000, Math.max(500, Number(process.env.FRACTALAI_FET
 let receipt, directory;
 try {
   receipt = await boundedFetch(`${base}/api/midas/alerts/receipt/${id}`, { timeoutMs, headers: { accept: 'application/json' } });
-  directory = await boundedFetch(`${base}/.well-known/x402-receipt-keys`, { timeoutMs, headers: { accept: 'application/json' } });
+  directory = (await fetchLegacyDirectory(`${base}/.well-known/x402-receipt-keys`, { timeoutMs })).text;
 } catch (e) {
   console.error(`could not fetch: ${oneLine(e.detail ?? e.message)}`);
   process.exit(EXIT.INPUT);

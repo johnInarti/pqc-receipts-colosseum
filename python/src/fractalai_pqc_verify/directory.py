@@ -19,6 +19,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
+from urllib.parse import urljoin
 
 from . import mldsa
 from ._safe import https_get_json, strict_json_loads
@@ -27,6 +28,8 @@ from .profiles import strict_b64
 
 __all__ = [
     "DEFAULT_DIRECTORY_URL",
+    "LEGACY_DIRECTORY_PATH",
+    "LEGACY_DIRECTORY_SPEC",
     "KEY_DIR_DOMAIN",
     "DirectoryVerification",
     "KeyDirectory",
@@ -39,6 +42,12 @@ __all__ = [
 ]
 
 DEFAULT_DIRECTORY_URL = "https://fractalai.net.co/.well-known/x402-receipt-keys"
+#: The x402 delivery-receipt spec (§7.1) reserves /.well-known/x402-receipt-keys for its own format
+#: (x402-receipt-key-directory/1). FractalAI's FRACTALAI-key-directory-v1 chain moves, byte for byte, to
+#: LEGACY_DIRECTORY_PATH; signed receipts that embed the old URL keep verifying through the same-origin
+#: relocation in fetch_key_directory (a document's own pointers are never followed).
+LEGACY_DIRECTORY_SPEC = "FRACTALAI-key-directory-v1"
+LEGACY_DIRECTORY_PATH = "/.well-known/fractalai-key-directory"
 KEY_DIR_DOMAIN = "FRACTALAI-key-directory-v1"
 _ZERO_ROOT = "0" * 64
 USER_AGENT = "fractalai-pqc-verify (+https://github.com/johnInarti/pqc-receipts-colosseum)"
@@ -241,10 +250,22 @@ def fetch_key_directory(
     # red-team F6: no https->http redirect (the "tls" trust basis would be a lie), size cap, JSON only
     try:
         raw, final_url = https_get_json(url, user_agent=USER_AGENT, timeout=timeout)
-    except ValueError as e:
-        raise KeyDirectoryError(f"key directory fetch refused: {e}") from e
-    if not isinstance(raw, dict):
-        raise KeyDirectoryError("key directory is not a JSON object")
+    except (ValueError, OSError) as e:
+        raw, final_url, first_error = None, url, e
+    else:
+        first_error = None
+    if not (isinstance(raw, dict) and raw.get("spec") == LEGACY_DIRECTORY_SPEC):
+        alt = urljoin(url, LEGACY_DIRECTORY_PATH)
+        if alt == url:
+            if first_error is not None:
+                raise KeyDirectoryError(f"key directory fetch refused: {first_error}") from first_error
+            raise KeyDirectoryError(f"{url} is not a {LEGACY_DIRECTORY_SPEC} document")
+        try:
+            raw, final_url = https_get_json(alt, user_agent=USER_AGENT, timeout=timeout)
+        except (ValueError, OSError) as e:
+            raise KeyDirectoryError(f"key directory fetch refused at {url} and {alt}: {e}") from e
+        if not (isinstance(raw, dict) and raw.get("spec") == LEGACY_DIRECTORY_SPEC):
+            raise KeyDirectoryError(f"neither {url} nor {alt} is a {LEGACY_DIRECTORY_SPEC} document")
     return _check(
         raw, final_url, governance_key=governance_key, anchored_root=anchored_root, expected_prev_root=expected_prev_root,
         require_authenticated=require_authenticated, default_basis="tls", backend=backend,

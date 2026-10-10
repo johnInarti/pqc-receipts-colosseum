@@ -140,6 +140,17 @@ Any failure: `DIRECTORY_INVALID` (or `DIRECTORY_SIGNER_NOT_PINNED`).
 - `revoked` → only if `revoked_at` is set **and** a counted consensus anchor (§7) has time `T_a < revoked_at`
   and `T ≤ T_a + skew`. The signed time alone never rescues a revoked key (its holder can sign any time).
 
+### 6.x Location (kernel 2.3)
+
+The FractalAI chain (`FRACTALAI-key-directory-v1`) is served at `/.well-known/fractalai-key-directory` (archives
+`…/epoch/<n>`, `…/epochs`). `/.well-known/x402-receipt-keys` is reserved by the x402 delivery-receipt spec (§7.1)
+for its own format (`x402-receipt-key-directory/1`), a separate chain with its own governance pair. Receipts signed
+before the move embed the old URL in their signed bytes, so a verifier given a directory URL MUST: fetch it; if
+the document's `spec` is not `FRACTALAI-key-directory-v1` (or the fetch fails), fetch `/.well-known/fractalai-key-directory`
+**on the same origin** and require that one to be. It MUST NOT follow any pointer found inside a fetched document,
+and MUST NOT treat a `x402-receipt-key-directory/1` document as a FractalAI epoch. Trust still comes only from the
+pinned roots (§6); the location rule changes where bytes are fetched, never what they are verified against.
+
 ## 7. Time proofs from consensus
 
 7.1 Anchor references (`receipt.anchor`, `receipt.anchors[]` or caller-supplied, ≤ 8) are **hints**. Every fact

@@ -11,7 +11,7 @@
  */
 import { readFileSync } from 'node:fs';
 import {
-  verify, verifyDirectoryChain, keyAuthorizes, parseJsonStrict, boundedFetch, oneLine, safeJson, sha256hex,
+  verify, verifyDirectoryChain, keyAuthorizes, parseJsonStrict, boundedFetch, fetchLegacyDirectory, oneLine, safeJson, sha256hex,
   BAKED_ROOTS, RECEIPT_ANCHORED_TOPIC, ANCHOR_SCHEME, EXIT, KINDS,
 } from '@fractalai/pqc-trust-kernel';
 
@@ -106,7 +106,7 @@ export async function verifyAnchoredSeal(seal, opts = {}) {
 
 /** Fetch the raw key directory (bounded; strict JSON). The kernel verifies it against the pinned roots. */
 export async function fetchKeyDirectory(url = DEFAULT_KEYS_URL, fetchImpl) {
-  return parseJsonStrict(await boundedFetch(url, { headers: { accept: 'application/json' }, ...(fetchImpl ? { fetchImpl } : {}) }));
+  return parseJsonStrict((await fetchLegacyDirectory(url, fetchImpl ? { fetchImpl } : {})).text);
 }
 /** Keys usable now from the fetched directory (verified against the pinned roots; [] otherwise). */
 export async function fetchTrustedKeys(url = DEFAULT_KEYS_URL, fetchImpl) {
@@ -125,7 +125,7 @@ if (isMain) {
   try { raw = parseJsonStrict(readFileSync(file, 'utf8')); } catch (e) { console.error(`error: ${oneLine(e.detail ?? e.message)}`); process.exit(EXIT.INPUT); }
   const seal = raw.seal && !raw.canonical && !raw.body ? { ...raw.seal, ...(raw.anchor && !raw.seal.anchor ? { anchor: raw.anchor } : {}) } : raw;
   const trusted = many('--trusted-key');
-  const keyDirectory = trusted.length ? undefined : await boundedFetch(opt('--keys-url') ?? DEFAULT_KEYS_URL).catch((e) => { console.error(`error: key directory: ${oneLine(e.detail ?? e.message)}`); process.exit(EXIT.INPUT); });
+  const keyDirectory = trusted.length ? undefined : await fetchLegacyDirectory(opt('--keys-url') ?? DEFAULT_KEYS_URL).then((r) => r.text).catch((e) => { console.error(`error: key directory: ${oneLine(e.detail ?? e.message)}`); process.exit(EXIT.INPUT); });
   const r = await verifyAnchoredSeal(seal, {
     keyDirectory, trustedPublicKeysB64: trusted.length ? trusted : undefined, rpcUrl: opt('--rpc'), crossCheckRpcUrls: many('--cross-rpc'),
     requireFinalized: args.includes('--finalized'), allowTestnet: args.includes('--allow-testnet'), expectedAnchoredBy: opt('--anchored-by'),

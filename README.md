@@ -60,6 +60,26 @@ directory must verify against the **pinned** governance key and checkpoint, and 
 receipt kind at the receipt's **signed** time. `verifier/verify-midas-alert.mjs` does the same through the
 compatibility layer.
 
+## Verify a production x402 delivery receipt with OpenSSL only (Node 24+)
+
+Since 2026-10-10 the `witness` route returns an x402 `delivery-receipt` (draft v0.2.1, proposed in
+x402-foundation/x402#3758) by reference. This check uses **only `node:crypto` (OpenSSL 3.5) and a public RPC**:
+no noble, no FractalAI code. It recomputes the receipt id and the directory root, verifies both governance
+signatures and both receipt signatures (Ed25519 session + ML-DSA-65 archival), rejects a one-bit change, and reads
+the settlement Transfer from the chain.
+
+```bash
+node verifier/verify-delivery-receipt-openssl.mjs 77795afae30c36075ed22e6593e28d0b4d7ae24c23acebfdcf8e0c0dc494b5fb \
+  --pin-ed25519 3e7f09b0566701962c0994dba8da89b930a091506b4fbb6472a742bcd2372877 \
+  --pin-ml-dsa-65 bec0e906bf74e6f20003f073b4a0d61a99309810909b549cf4db27af159b94c1
+# 17 x OK ... RESULT: ALL OK
+```
+
+The pins are SHA-256 of the raw governance keys of `/.well-known/x402-receipt-keys` epoch 1; the older
+FractalAI chain (epoch 4) cross-signs that root at
+`/.well-known/fractalai-key-directory/cross-cert/x402-receipt-key-directory-1.json`. That receipt settled
+15.98 COPM on Polygon from **our own test wallet**: it is an acceptance run, not a customer payment.
+
 ## LatAm Stablecoin Receipts (Trust Kernel 2.1, kind `latam-stablecoin-receipt`)
 
 A post-quantum (ML-DSA-65) receipt that a transfer of a **pinned** Latin-American stablecoin — COPM (Polygon), BRLA

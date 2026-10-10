@@ -99,6 +99,16 @@ Domain separation: the first line of every signed message (`FRACTALAI-x402-serve
 `FRACTALAI-stablecoin-receipt-v1`, `FRACTALAI-agent-commerce-receipt-v1`, `FRACTALAI-key-directory-v1`) is distinct, and a key's directory `use` authorizes
 exactly the kinds listed above, so a signature for one product can never be presented as another.
 
+**Route labels and the legacy status of the `x402-served` profile.** In the `FRACTALAI-x402-served-v1` kinds the
+second line (`<route>`, e.g. `midas-alert`, `x402-witness`, `verify-agent`) is a **label chosen by the seller**, not the
+request path as received: it separates product domains, but it does not identify an endpoint a third party can recompute,
+and a seller could reuse a label across endpoints. These kinds also bind no settlement (`transaction`, `logIndex`, `payer`,
+`amount`). For x402 routes they are therefore a **legacy profile**, kept so that receipts already issued stay verifiable.
+New x402 receipts SHOULD use the vendor-neutral `delivery-receipt` extension (x402-foundation/x402#3758), which binds
+`resourceUrl` + `method` as received, the settlement locator and the key-directory epoch. A seller that emits both MUST
+treat `delivery-receipt` as authoritative, and a verifier MUST NOT let a passing `x402-served` receipt make a failing
+`delivery-receipt` pass.
+
 ## 6. Key directory
 
 6.1 **Epoch check** (`checkEpoch`): `spec = FRACTALAI-key-directory-v1`; `epoch` positive safe integer; `root`,

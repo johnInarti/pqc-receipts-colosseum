@@ -14,7 +14,7 @@ const target = args.find((a) => !a.startsWith('--') && !Object.values({ a: opt('
 if (!target) { console.error('usage: verify-delivery-receipt-openssl.mjs <receiptId|URL> [--pin-ed25519 HEX] [--pin-ml-dsa-65 HEX]'); process.exit(2); }
 const url = /^[0-9a-f]{64}$/.test(target) ? `https://fractalai.net.co/x402/receipts/${target}` : target;
 const PINS = { ed25519: opt('--pin-ed25519'), 'ml-dsa-65': opt('--pin-ml-dsa-65') };
-const RPC = { 'eip155:137': 'https://polygon-bor-rpc.publicnode.com', 'eip155:8453': 'https://mainnet.base.org', 'eip155:42161': 'https://arb1.arbitrum.io/rpc' };
+const RPC = { 'eip155:137': 'https://polygon-bor-rpc.publicnode.com', 'eip155:8453': 'https://mainnet.base.org', 'eip155:42161': 'https://arb1.arbitrum.io/rpc', 'eip155:480': 'https://worldchain-mainnet.g.alchemy.com/public', 'eip155:42220': 'https://forno.celo.org' };
 
 const OID = { ed25519: '06032b6570', 'ml-dsa-65': '0609608648016503040312', 'ml-dsa-87': '0609608648016503040313' };
 const L = (n) => n < 128 ? Buffer.from([n]) : n < 256 ? Buffer.from([0x81, n]) : Buffer.from([0x82, n >> 8, n & 255]);

@@ -1,0 +1,16 @@
+{
+  "name": "fractalai-pay-latam-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pay FractalAI x402 endpoints in a LatAm stablecoin (MXNB, BRLA, COPM, COPW, wCOP, wARS, wBRL, wMXN) or USDC: reads the 402, signs EIP-3009 or Permit2 exactly as the server expects.",
+  "bin": { "fractalai-pay-latam": "./pay.mjs" },
+  "scripts": {
+    "test": "node test/run.mjs"
+  },
+  "engines": { "node": ">=20" },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "ethers": "~6.15.0"
+  }
+}

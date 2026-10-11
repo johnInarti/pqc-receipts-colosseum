@@ -80,6 +80,21 @@ FractalAI chain (epoch 4) cross-signs that root at
 `/.well-known/fractalai-key-directory/cross-cert/x402-receipt-key-directory-1.json`. That receipt settled
 15.98 COPM on Polygon from **our own test wallet**: it is an acceptance run, not a customer payment.
 
+## Pay in your currency: COP, MXN, BRL, ARS · Paga en tu moneda
+
+[`examples/pay-latam/`](examples/pay-latam/) is a minimal CLI (Node 20+, `ethers` only) that pays any FractalAI x402
+route in MXNB (EIP-3009, gasless), COPM / BRLA / COPW (Polygon) or wCOP / wARS / wBRL / wMXN (Base, World Chain) via
+Permit2: it reads the live `402`, shows the price in local currency with the official reference rate the server
+used, signs exactly once (a retry re-sends the same payment), and prints the `delivery-receipt` id plus the
+OpenSSL-only verification command. Tested end to end on local anvil forks of Base and Polygon (`npm test`), never
+against production. README in Spanish and English; pre-pilot, and accepting a token is not endorsing its issuer.
+
+```bash
+cd examples/pay-latam && npm install
+node pay.mjs --list                                                   # today's prices, signs nothing
+PAYER_PRIVATE_KEY=… node pay.mjs --token MXNB --network base --yes    # pay /api/x402/witness
+```
+
 ## LatAm Stablecoin Receipts (Trust Kernel 2.1, kind `latam-stablecoin-receipt`)
 
 A post-quantum (ML-DSA-65) receipt that a transfer of a **pinned** Latin-American stablecoin — COPM (Polygon), BRLA
@@ -118,6 +133,7 @@ conformance/   neutral conformance suite + golden vectors for PQC-signed agent r
 contracts/     PQCReceiptAnchor.sol (write-once, ownerless timestamp anchor; 20/20 Hardhat tests) and
                FractalCheckpoint.sol (append-only accountability anchor on Base)
 python/       fractalai-pqc-verify: the same offline verifier + 7 conformance vectors for Python agents
+examples/      pay-latam: pay x402 routes in COP / MXN / BRL / ARS stablecoins (EIP-3009 + Permit2), fork-tested
 docs/          MIDAS signed alerts, key rotation / directory design, rescue vault V2, FRC-55R asset layer,
                Arbitrum anchor design, x402 catalog snapshot
 ```

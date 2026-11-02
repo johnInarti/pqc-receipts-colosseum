@@ -48,6 +48,15 @@ Se aceptan solo los recibos que cumplen las dos condiciones:
 
 Un recibo aceptado **no** dice que el contenido sea correcto ni que el pago se liquidó. Lo segundo solo lo dice si el perfil lo comprueba contra un artefacto firmado por el riel (por ejemplo, el recibo ES256 de AP2).
 
+## Atestación externa de capacidades (opcional, A2A #2330)
+
+Dos afirmaciones distintas con dos firmantes distintos: la **atestación** de un tercero, ANTES del pago («las skills del agente se comportan como declara su card»), y el **recibo** ML-DSA-65, DESPUÉS de la entrega («esto se entregó, ligado a este pago»). El recibo solo **se compromete** con la atestación que presentó el agente; ni la verifica ni la avala.
+
+- Compromiso: `bindings.capability_attestation_sha256 = sha256(JCS(ref))`. El cuerpo firmado no cambia de forma (§13.2), así que los recibos sin este binding verifican igual que antes.
+- Referencia (`src/attestation.ts`, forma estricta): `{v, digest:{alg:"sha-256", value}, issuer, key_id, uri (https), algorithm, issued_at, expires_at}`. En A2A viaja en `artifact.metadata["https://fractalai.net.co/a2a/ext/pqc-receipt/v1/capability-attestation"]`.
+- `checkCapabilityAttestation(body, ref, {document?, now?})` comprueba cuatro cosas: que la referencia es la firmada, que la atestación estaba vigente al emitirse el recibo, que no ha caducado (`now`) y que los bytes del documento coinciden con el digest. **No** verifica la firma propia de la atestación, que pertenece al formato de quien la emite.
+- Tests: `test/capability-attestation.test.ts` (5). Cada comprobación tiene su control de sabotaje: si se anula, falla su test.
+
 ## Estado honesto
 
 - **No hay clave de producción con `use = commerce-receipt`.** Los tests usan una PKI de prueba, que el kernel reporta como `trust_basis: "override"`. Con las raíces de producción el recibo da `KEY_NOT_LISTED`, y hay un test que lo comprueba.

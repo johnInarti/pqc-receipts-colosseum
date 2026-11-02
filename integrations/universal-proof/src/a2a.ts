@@ -12,6 +12,8 @@
  */
 import { jcs, sha256Of } from './core.ts';
 import type { CommerceReceipt } from './core.ts';
+import { checkCapabilityAttestationRef } from './attestation.ts';
+import type { CapabilityAttestationRef } from './attestation.ts';
 
 export const FRACTALAI_A2A_EXTENSION = 'https://fractalai.net.co/a2a/ext/pqc-receipt/v1';
 
@@ -44,3 +46,16 @@ export function extractReceiptText(a: A2AArtifact): string | null {
   if (r === undefined || r === null || !(a.extensions ?? []).includes(FRACTALAI_A2A_EXTENSION)) return null;
   return JSON.stringify(r);
 }
+
+/**
+ * Optional capability attestation reference (see attestation.ts). It travels next to the receipt, under its own
+ * metadata key; the receipt commits to it through bindings.capability_attestation_sha256.
+ */
+export const CAPABILITY_ATTESTATION_METADATA_KEY = `${FRACTALAI_A2A_EXTENSION}/capability-attestation`;
+
+export function attachCapabilityAttestation(a: A2AArtifact, ref: CapabilityAttestationRef): A2AArtifact {
+  return { ...a, metadata: { ...(a.metadata ?? {}), [CAPABILITY_ATTESTATION_METADATA_KEY]: checkCapabilityAttestationRef(ref) } };
+}
+
+/** The reference carried by an artifact (unchecked; pass it to checkCapabilityAttestation), or undefined. */
+export const extractCapabilityAttestation = (a: A2AArtifact): unknown => a.metadata?.[CAPABILITY_ATTESTATION_METADATA_KEY];
